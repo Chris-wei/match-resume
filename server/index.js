@@ -132,7 +132,7 @@ async function runAnalyzeJob(job, { resume, jd, owner, usageId, inputHash }) {
     })
   } catch (e) {
     db.removeUsage(usageId)
-    console.error('pipeline failed:', e.message, config.LLM_MOCK ? '' : '(LLM=' + modelTag() + ')')
+    console.error(`pipeline failed at stage=${job.stage}:`, e.message, config.LLM_MOCK ? '' : '(LLM=' + modelTag() + ')')
     jobs.update(job, { status: 'failed', code: 'ANALYZE_FAILED', message: '分析失败，请稍后重试（本次不消耗免费次数）' })
     return
   }

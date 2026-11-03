@@ -46,7 +46,9 @@ async function splitJD(jdText, { deadline } = {}) {
           system: SYSTEM,
           user: `<job_description>\n${jdText}\n</job_description>`,
           maxTokens: 3000,
-          deadline
+          deadline,
+          timeoutMs: config.LLM_SPLIT_TIMEOUT_MS,
+          label: 'split'
         })
       ),
     config.MAX_JUDGMENT_RETRY,

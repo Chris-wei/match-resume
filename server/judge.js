@@ -43,7 +43,9 @@ async function judgeBatch(spansContext, batchLines, deadline) {
           user: `${spansContext}\n\n<requirements>\n${batchLines}\n</requirements>`,
           maxTokens: 3500,
           deadline,
-          model: judgeModel()
+          model: judgeModel(),
+          timeoutMs: config.LLM_JUDGE_TIMEOUT_MS,
+          label: 'judge'
         })
       ),
     config.MAX_JUDGMENT_RETRY,

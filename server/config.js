@@ -107,6 +107,10 @@ module.exports = {
   // 千问/智谱均支持；若换的厂商不支持该参数（报 400），设 LLM_JSON_MODE=0 关掉
   LLM_JSON_MODE: process.env.LLM_JSON_MODE !== '0',
   LLM_TIMEOUT_MS: 45000,
+  // 分步骤的单次请求超时：正常拆解 ~10s、判定 ~20s。卡住的请求尽早掐断重试，
+  // 否则一次 45s 的挂起就吃掉 75s 总时限的大半，重试来不及（实测出现过）
+  LLM_SPLIT_TIMEOUT_MS: intEnv('LLM_SPLIT_TIMEOUT_MS', 25000),
+  LLM_JUDGE_TIMEOUT_MS: intEnv('LLM_JUDGE_TIMEOUT_MS', 40000),
   LLM_RETRIES: 2,
   // 主报告（拆解+判定+打分）的总时限：超时即失败并退还次数。
   // 小程序端轮询上限比它长，保证客户端一定能看到最终状态

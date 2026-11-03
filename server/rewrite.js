@@ -35,7 +35,7 @@ async function proposeRewrites(requirements, judgments, { deadline } = {}) {
       .join('\n')
     if (!lines) return []
 
-    const out = await chatJSON({ system: SYSTEM, user: lines, maxTokens: 3000, deadline })
+    const out = await chatJSON({ system: SYSTEM, user: lines, maxTokens: 3000, deadline, label: 'rewrite' })
     list = listFrom(out, 'rewrites') || []
   }
 

@@ -130,7 +130,7 @@ function checkDeadline(deadline) {
   if (remainingMs(deadline) <= 0) throw transportError('LLM_DEADLINE', false)
 }
 
-async function chat({ system, user, maxTokens, deadline, model }) {
+async function chat({ system, user, maxTokens, deadline, model, timeoutMs, label }) {
   if (!config.LLM_API_KEY) throw transportError('LLM_NOT_CONFIGURED', false)
   const body = {
     model: model || config.LLM_MODEL,
@@ -147,11 +147,14 @@ async function chat({ system, user, maxTokens, deadline, model }) {
   let lastErr
   for (let attempt = 0; attempt <= config.LLM_RETRIES; attempt++) {
     checkDeadline(deadline)
-    const timeout = Math.min(config.LLM_TIMEOUT_MS, remainingMs(deadline))
+    const timeout = Math.min(timeoutMs || config.LLM_TIMEOUT_MS, remainingMs(deadline))
+    const t0 = Date.now()
     try {
       return await requestOnce(url, config.LLM_API_KEY, body, timeout)
     } catch (e) {
       lastErr = e
+      // 记录每次失败：哪一步、哪个模型、第几次、耗时多久——排查超时/限流时用
+      console.warn(`LLM ${label || 'call'} (${body.model}) 第 ${attempt + 1} 次失败，${((Date.now() - t0) / 1000).toFixed(1)}s: ${String(e.message).slice(0, 120)}`)
       if (e.retryable === false) throw e
       const backoff = 800 * (attempt + 1)
       if (attempt < config.LLM_RETRIES) {
