@@ -1,0 +1,258 @@
+/* =========================================================
+   全局样式：设计令牌 + 通用组件
+   视觉方向：干净的"体检报告"感——白卡片、克制的品牌蓝、
+   用语义色（绿/琥珀/红/灰）承载判定结果，信息层级靠字重与留白
+   ========================================================= */
+page {
+  /* 品牌 */
+  --primary: #3b5bfd;
+  --primary-dark: #2a44d8;
+  --primary-soft: #eef1ff;
+  --primary-line: #d6ddff;
+
+  /* 中性 */
+  --bg: #f4f5f9;
+  --card: #ffffff;
+  --text: #111827;
+  --text-2: #4b5563;
+  --text-3: #9ca3af;
+  --line: #eceef3;
+  --gray-bg: #f3f4f7;
+
+  /* 语义：判定结果 */
+  --green: #12a150;
+  --green-bg: #e8f7ef;
+  --orange: #d97706;
+  --orange-bg: #fef4e2;
+  --red: #e5484d;
+  --red-bg: #fdeeee;
+  --slate: #6b7280;
+  --slate-bg: #f1f2f5;
+
+  --radius: 24rpx;
+  --radius-sm: 14rpx;
+  --shadow: 0 4rpx 24rpx rgba(17, 24, 39, 0.05);
+
+  background: var(--bg);
+  color: var(--text);
+  font-size: 28rpx;
+  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 卡片 ---------- */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 32rpx;
+  margin: 24rpx 28rpx;
+  box-shadow: var(--shadow);
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  font-size: 31rpx;
+  font-weight: 600;
+  margin-bottom: 20rpx;
+  letter-spacing: 0.5rpx;
+}
+
+.card-title .aside {
+  margin-left: auto;
+  font-size: 24rpx;
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+/* ---------- 按钮 ---------- */
+button::after {
+  border: none;
+}
+
+/* 微信 button 默认 width:184px + 居中，统一改成撑满容器 */
+.btn-primary,
+.btn-ghost {
+  width: 100% !important;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  border-radius: 999rpx;
+  font-size: 31rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 26rpx 0;
+  text-align: center;
+  border: none;
+  box-shadow: 0 10rpx 28rpx rgba(59, 91, 253, 0.28);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.btn-primary.button-hover,
+.btn-primary:active {
+  background: var(--primary-dark);
+  transform: scale(0.985);
+  box-shadow: 0 6rpx 16rpx rgba(59, 91, 253, 0.22);
+}
+
+.btn-primary[disabled] {
+  background: #c3cdfb !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: none;
+}
+
+.btn-ghost {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: none;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  line-height: 1.4;
+  padding: 20rpx 0;
+  text-align: center;
+}
+
+.btn-ghost.button-hover {
+  background: var(--primary-line);
+}
+
+.btn-ghost[disabled] {
+  background: var(--gray-bg) !important;
+  color: var(--text-3) !important;
+}
+
+/* ---------- 文字 ---------- */
+.text-2 {
+  color: var(--text-2);
+  font-size: 26rpx;
+}
+
+.text-3 {
+  color: var(--text-3);
+  font-size: 24rpx;
+}
+
+.link {
+  color: var(--primary);
+}
+
+/* ---------- 判定标签 ---------- */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 22rpx;
+  font-weight: 600;
+  line-height: 1.5;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  white-space: nowrap;
+}
+
+.tag-hit { background: var(--green-bg); color: var(--green); }
+.tag-partial { background: var(--orange-bg); color: var(--orange); }
+.tag-miss { background: var(--red-bg); color: var(--red); }
+.tag-unclear { background: var(--slate-bg); color: var(--slate); }
+
+/* ---------- 底部弹层 ---------- */
+.modal-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(17, 24, 39, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fade-in 0.18s ease;
+}
+
+.modal-mask.center {
+  align-items: center;
+}
+
+.sheet {
+  width: 100%;
+  max-height: 82vh;
+  background: #fff;
+  border-radius: 36rpx 36rpx 0 0;
+  padding: 20rpx 36rpx calc(36rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  overflow-y: auto;
+  animation: slide-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sheet-handle {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 8rpx;
+  background: var(--line);
+  margin: 0 auto 24rpx;
+}
+
+.sheet-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 28rpx;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(40%); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ---------- 加载 ---------- */
+.pulse-dot {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(0.7); opacity: 0.4; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* 骨架屏：内容生成中占位 */
+.skeleton {
+  border-radius: 10rpx;
+  background: linear-gradient(90deg, #f0f1f5 25%, #e6e8ee 37%, #f0f1f5 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* ---------- 空态 / 提示条 ---------- */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  border-radius: var(--radius-sm);
+  padding: 18rpx 22rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.notice-warn { background: var(--orange-bg); color: #92400e; }
+.notice-danger { background: var(--red-bg); color: #b42318; }
+.notice-info { background: var(--primary-soft); color: var(--primary-dark); }

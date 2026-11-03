@@ -1,0 +1,34 @@
+<view class="draft-watermark" wx:if="{{!REVIEWED}}">草案 · 未经律师审阅</view>
+
+<view class="card">
+  <view class="card-title">隐私政策</view>
+  <view class="text-3">生效日期：{{effectiveDate}}</view>
+  <view class="legal-section">
+    <view class="legal-h">1. 我们收集什么</view>
+    <view>仅收集你主动提交的两段文本：简历文本与职位描述（JD）文本，以及匿名标识（微信 openid 或随机设备号）用于次数统计。</view>
+    <view class="legal-h">2. 脱敏处理</view>
+    <view>文本在离开你的手机之前，邮箱、手机号、身份证号会被自动替换为占位符；服务器还有第二道同样处理，并会把简历开头的姓名替换掉。大模型服务接触不到你的联系方式和姓名。</view>
+    <view class="legal-h">3. 数据如何使用</view>
+    <view>文本仅用于本次匹配分析。我们仅使用承诺「不将请求数据用于模型训练」的大模型服务处理，处理完成后服务方不保留数据。</view>
+    <view class="legal-h">4. 数据存储与删除</view>
+    <view>报告中保存脱敏后的简历内容（按行保存，用于「点击引用看上下文」）以及分析结果（分数、判定、引用片段、改写建议），不保存未脱敏的原文。报告保留 30 天后自动删除；你也可以在报告页随时「删除这份报告」，删除即时生效。用于限流的计数记录（不含内容）保留 90 天；职位描述的拆解结果会缓存 7 天，以便同一职位的分析更快、更一致。</view>
+    <view class="legal-h">5. 你的权利</view>
+    <view>你可以随时删除任意报告；如需彻底删除全部数据，删除服务器数据目录或联系我们。</view>
+  </view>
+</view>
+
+<view class="card">
+  <view class="card-title">用户协议</view>
+  <view class="legal-section">
+    <view class="legal-h">1. 服务说明</view>
+    <view>本工具基于大模型与规则校验提供简历与职位描述的匹配分析，结果仅供参考，不构成任何录用、求职决策依据。</view>
+    <view class="legal-h">2. 关于 AI 判断</view>
+    <view>每条判断附有原文引用并经程序逐字校验；被标记为「无法确认」的条目请自行核对。改写建议不编造事实，使用前请确认内容真实。</view>
+    <view class="legal-h">3. 免费与使用限制</view>
+    <view>当前版本完全免费。为防滥用，每人每天有限定次数的分析机会，改写建议的一键复制每天限 3 条（内容始终可见）；按 IP 与全站维度另设总量限制。</view>
+    <view class="legal-h">4. 免责声明</view>
+    <view>对因模型输出偏差、网络故障或不可抗力造成的损失，本工具不承担责任。请勿提交他人的简历或包含他人隐私的信息。</view>
+    <view class="legal-h">5. 协议修改</view>
+    <view>我们可能适时修订本协议，修订后在本页公示。继续使用即视为接受修订。</view>
+  </view>
+</view>

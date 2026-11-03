@@ -1,0 +1,492 @@
+// 本地内核测试（不调任何 API、不碰网络与磁盘存储）：
+//   1. 纯逻辑单测：脱敏 / 引用匹配 / 切分 / 校验 / 打分 / 一句话结论 / 风控
+//   2. mock 流水线集成测试：examples 下的简历 + JD 全链路跑通
+// 运行：npm test  或  node scripts/test-local.js
+
+process.env.LLM_MOCK = '1' // 必须在 require 之前设置
+
+const fs = require('fs')
+const path = require('path')
+const assert = require('assert')
+
+const ROOT = path.join(__dirname, '..')
+const S = (f) => path.join(ROOT, 'server', f)
+
+const { redact, redactSpans } = require(S('redact'))
+const { redact: clientRedact } = require(path.join(ROOT, 'miniprogram', 'utils', 'redact'))
+const { quoteMatches, locateQuote, containsTerm } = require(S('text'))
+const config = require(S('config'))
+const auth = require(S('auth'))
+const llm = require(S('llm'))
+const http = require('http')
+const { segmentResume, renderSpans } = require(S('segment'))
+const { verifyRequirements, verifyJudgments } = require(S('verify'))
+const { scoreMatch } = require(S('score'))
+const { retrieveCandidates } = require(S('retrieve'))
+const { conclude } = require(S('conclude'))
+const limits = require(S('limits'))
+const { runPipeline } = require(S('core'))
+const { proposeRewrites } = require(S('rewrite'))
+
+let passed = 0
+let failed = 0
+async function testAsync(name, fn) {
+  try {
+    await fn()
+    passed++
+    console.log(`  ✓ ${name}`)
+  } catch (e) {
+    failed++
+    console.error(`  ✗ ${name}\n    ${e.message}`)
+  }
+}
+function test(name, fn) {
+  try {
+    fn()
+    passed++
+    console.log(`  ✓ ${name}`)
+  } catch (e) {
+    failed++
+    console.error(`  ✗ ${name}\n    ${e.message}`)
+  }
+}
+
+// 构造假 db（只暴露 limits 用到的 countUsage），隔离磁盘
+function fakeDb(usage) {
+  return { countUsage: (filter, since) => usage.filter(
+    (u) => u.kind === filter.kind && u.createdAt >= since &&
+      (!filter.owner || u.owner === filter.owner) &&
+      (!filter.ipHash || u.ipHash === filter.ipHash)
+  ).length }
+}
+
+const CFG = {
+  GLOBAL_DAILY_CAP: 200,
+  ANALYZE_PER_IP_PER_DAY: 10,
+  ANALYZE_PER_IP_PER_10MIN: 5,
+  ANALYZE_PER_IDENTITY_PER_DAY: 3,
+  ANALYZE_PER_IDENTITY_PER_10MIN: 3,
+  COPY_PER_IDENTITY_PER_DAY: 3
+}
+const NOW = new Date('2026-11-02T14:00:00').getTime()
+const TODAY = limits.dayStart(NOW)
+const u = (kind, owner, ipHash, at) => ({ kind, owner, ipHash, createdAt: at })
+
+console.log('\n== 单测：脱敏 ==')
+test('邮箱替换', () => assert.ok(redact('联系 zhangsan@example.com').includes('[EMAIL]')))
+test('大陆手机号替换', () => assert.ok(redact('手机 13812345678').includes('[PHONE]')))
+test('带分隔手机号替换', () => assert.ok(redact('电话 138-1234-5678').includes('[PHONE]')))
+test('身份证替换', () => assert.ok(redact('号 11010119900307891X').includes('[ID]')))
+test('普通数字不受影响', () => assert.equal(redact('QPS 8000，提升 60%'), 'QPS 8000，提升 60%'))
+test('小程序端与服务端脱敏结果一致（两份正则不漂移）', () => {
+  const samples = ['邮箱 a.b+c@x-y.com.cn', '手机 +86 138-1234-5678', '身份证 11010119900307891X', 'tel +1 (415) 555-0123', 'QPS 8000，2019-2023']
+  for (const t of samples) assert.equal(clientRedact(t), redact(t), t)
+})
+test('姓名脱敏：header 首行名字 / 姓名字段', () => {
+  const out = redactSpans(segmentResume('张晨\n姓名：欧阳娜娜\nName: John Smith\n工作经历\n负责后端')).map((x) => x.text)
+  assert.deepEqual(out, ['[NAME]', '姓名：[NAME]', 'Name: [NAME]', '负责后端'])
+})
+test('姓名脱敏不误伤正文', () => {
+  const out = redactSpans(segmentResume('求职意向：产品经理\n工作经历\n张江高科')).map((x) => x.text)
+  assert.deepEqual(out, ['求职意向：产品经理', '张江高科'])
+})
+
+console.log('\n== 单测：引用匹配（护城河）==')
+test('逐字命中', () => assert.ok(quoteMatches('负责后端服务开发，使用 Java', '负责后端服务开发，使用 Java / Spring Boot')))
+test('标点/大小写漂移容忍', () => assert.ok(quoteMatches('负责后端服务开发，使用 java', '负责后端服务开发，使用 Java')))
+test('改写不接受', () => assert.ok(!quoteMatches('负责后端核心服务的开发工作', '负责后端服务开发，使用 Java')))
+test('空引用拒绝', () => assert.ok(!quoteMatches('', '任意原文')))
+test('定位引用：展示的是原文切片而非模型抄写版本', () => {
+  const r = locateQuote('负责后端服务开发，使用 java', '负责后端服务开发，使用 Java / Spring Boot')
+  assert.equal(r.exact, true)
+  assert.equal(r.text, '负责后端服务开发，使用 Java')
+})
+test('定位引用：模糊命中返回原文整句并标记 exact=false', () => {
+  const r = locateQuote('负责 后端 服务 开发 Java Spring', 'Java Spring 负责后端服务开发和维护。另一句')
+  assert.equal(r.exact, false)
+  assert.equal(r.text, 'Java Spring 负责后端服务开发和维护')
+})
+test('java 不误匹配 javascript', () => assert.ok(!containsTerm('精通 JavaScript 开发', 'java')))
+test('CJK 内嵌英文可命中', () => assert.ok(containsTerm('使用Python开发服务', 'python')))
+
+console.log('\n== 单测：切分 ==')
+const spans = segmentResume('张三\n\n工作经历\n- 负责 A 项目\n2021 入职 ABC\nEducation\n本科')
+test('标题不占编号', () => assert.equal(spans.length, 4))
+test('编号连续 S1..Sn', () => assert.deepEqual(spans.map((s) => s.id), ['S1', 'S2', 'S3', 'S4']))
+test('bullet 前缀剥离', () => assert.equal(spans[1].text, '负责 A 项目'))
+test('中英标题识别', () => assert.equal(spans[1].section, 'experience') && assert.equal(spans[3].section, 'education'))
+
+console.log('\n== 单测：JD 拆解校验 ==')
+const rejections = []
+const reqs = verifyRequirements(
+  '要求 5年以上 Java 开发经验；熟悉 K8s',
+  [
+    { text: 'Java 经验', jd_quote: '5年以上 Java 开发经验', category: 'experience', weight: 1, years: 5, skill: 'java' },
+    { text: '编造的要求', jd_quote: '这句不在 JD 里', category: 'skills', weight: 1 }
+  ],
+  rejections
+)
+test('未在 JD 中的 quote 被拒收', () => assert.equal(reqs.length, 1) && assert.equal(rejections.length, 1))
+test('id 重排', () => assert.equal(reqs[0].id, 'R1'))
+
+console.log('\n== 单测：判定校验（降级 unclear）==')
+const jRej = []
+const reqs2 = reqs.concat([
+  { id: 'R2', text: '技能 b', jdQuote: '熟悉 K8s', category: 'skills', weight: 1, years: null, skill: null }
+])
+const judgments = verifyJudgments(
+  reqs2,
+  spans,
+  [
+    { req_id: 'R1', verdict: 'hit', quote: '简历里没有这句', quote_id: 'S2', reason: '幻觉' },
+    { req_id: 'R2', verdict: 'hit', quote: '负责 A 项目', quote_id: 'S2', reason: 'ok' }
+  ],
+  jRej
+)
+test('幻觉引用整条降级 unclear', () => {
+  assert.equal(judgments[0].verdict, 'unclear')
+  assert.ok(judgments[0].flags.includes('evidence_rejected'))
+  assert.ok(judgments[0].flags.includes('downgraded_no_evidence'))
+})
+test('真实引用保留 hit', () => assert.equal(judgments[1].verdict, 'hit') && assert.equal(judgments[1].quoteId, 'S2'))
+test('大小写漂移的引用被替换为原文切片', () => {
+  const jj = verifyJudgments(reqs2.slice(1), spans, [{ req_id: 'R2', verdict: 'hit', quote: '负责 a 项目', quote_id: 'S2' }], [])
+  assert.equal(jj[0].quote, '负责 A 项目')
+})
+
+console.log('\n== 单测：确定性打分 ==')
+const mkReq = (id, category, weight, years) => ({ id, text: '要求' + id, jdQuote: 'q', category, weight, years: years || null, skill: null })
+const mkJudg = (id, verdict, yearsHint) => ({ reqId: id, verdict, quoteId: verdict === 'hit' ? 'S1' : '', quote: '', reason: '', yearsHint: yearsHint ?? null, flags: [] })
+const scoreReqSet = () => scoreMatch(
+  [mkReq('R1', 'skills', 1), mkReq('R2', 'experience', 1, 5), mkReq('R3', 'education', 1), mkReq('R4', 'keywords', 0.5)],
+  [mkJudg('R1', 'hit'), mkJudg('R2', 'hit', 3), mkJudg('R3', 'hit'), mkJudg('R4', 'miss')]
+)
+const s1 = scoreReqSet()
+const s2 = scoreReqSet()
+test('同一输入必得同分', () => assert.equal(s1.overall, s2.overall))
+test('年限不足按比例打折', () => {
+  const item = s1.items.find((i) => i.req.id === 'R2')
+  assert.ok(Math.abs(item.score - 0.6) < 1e-9)
+})
+test('雷达五维齐全', () => assert.equal(s1.radar.length, 5) && assert.ok(s1.radar.every((r) => typeof r.value === 'number')))
+const s3 = scoreMatch(
+  [mkReq('R1', 'experience', 1, 5), mkReq('R2', 'skills', 1), mkReq('R3', 'skills', 1), mkReq('R4', 'skills', 1)],
+  [mkJudg('R1', 'miss'), mkJudg('R2', 'hit'), mkJudg('R3', 'hit'), mkJudg('R4', 'hit')]
+)
+test('硬门槛 miss 触发封顶 60（原始 75 → 60）', () => assert.ok(s3.capped) && assert.equal(s3.overall, 60))
+
+console.log('\n== 单测：一句话结论（截图第一版：总分 + 一句话结论）==')
+const c1 = conclude(s1.score || s1, s1.items.map((i) => i.req), s1.items.map((i) => i.judgment))
+const c2 = conclude(s1.score || s1, s1.items.map((i) => i.req), s1.items.map((i) => i.judgment))
+test('结论非空且确定性', () => assert.ok(c1 && c1.length >= 8) && assert.equal(c1, c2))
+test('低分结论点名最重的缺失项', () => {
+  const low = conclude(s3, s3.items.map((i) => i.req), s3.items.map((i) => i.judgment))
+  assert.ok(low.includes('要求R1'))
+  assert.ok(low.includes('硬性年限'))
+})
+
+console.log('\n== 单测：风控（每人限次 / IP 限制 / 全站上限 / 复制限 3 条）==')
+const mkLimits = (usage) => limits.checkAnalyze(fakeDb(usage), 'u1', 'ip1', NOW, CFG)
+
+test('无记录 → 放行', () => assert.ok(mkLimits([]).ok))
+test('身份当日 3 次 → 拒（QUOTA_EXCEEDED）', () => {
+  const r = mkLimits([u('analyze', 'u1', 'ip9', TODAY + 1), u('analyze', 'u1', 'ip9', TODAY + 2), u('analyze', 'u1', 'ip9', TODAY + 3)])
+  assert.equal(r.code, 'QUOTA_EXCEEDED')
+})
+test('身份当日 2 次 → 放行', () => {
+  assert.ok(mkLimits([u('analyze', 'u1', 'ip9', TODAY + 1), u('analyze', 'u1', 'ip9', TODAY + 2)]).ok)
+})
+test('昨天的记录不占今日额度', () => {
+  assert.ok(mkLimits([u('analyze', 'u1', 'ip9', TODAY - 1000), u('analyze', 'u1', 'ip9', TODAY - 2000), u('analyze', 'u1', 'ip9', TODAY - 3000)]).ok)
+})
+test('身份 10 分钟窗 3 次 → 拒（RATE_LIMITED）', () => {
+  const r = mkLimits([u('analyze', 'u1', 'ip9', NOW - 60e3), u('analyze', 'u1', 'ip9', NOW - 120e3), u('analyze', 'u1', 'ip9', NOW - 180e3)])
+  assert.equal(r.code, 'RATE_LIMITED')
+})
+test('IP 当日 10 次 → 拒（换设备也没用）', () => {
+  const usage = []
+  for (let i = 0; i < 10; i++) usage.push(u('analyze', 'u' + i, 'ip1', TODAY + i * 1000))
+  assert.equal(mkLimits(usage).code, 'IP_LIMITED')
+})
+test('全站当日达 GLOBAL_DAILY_CAP → 拒', () => {
+  const usage = []
+  for (let i = 0; i < 200; i++) usage.push(u('analyze', 'u' + i, 'ip' + i, TODAY + 1000))
+  assert.equal(mkLimits(usage).code, 'GLOBAL_LIMITED')
+})
+test('PDF 解析 10 分钟窗限次', () => {
+  const usage = []
+  for (let i = 0; i < 5; i++) usage.push(u('pdf', 'u1', 'ip1', NOW - i * 1000))
+  assert.equal(limits.checkPdf(fakeDb(usage), 'u1', NOW, { PDF_PER_IDENTITY_PER_10MIN: 5, PDF_PER_IDENTITY_PER_DAY: 20 }).code, 'RATE_LIMITED')
+})
+test('quotaInfo.dateKey 用本地日期', () => {
+  assert.equal(limits.quotaInfo(fakeDb([]), 'u1', 'ip1', new Date(2026, 10, 2, 0, 30).getTime(), CFG).dateKey, '2026-11-02')
+})
+const copyDb = fakeDb([u('copy', 'u1', 'ip1', TODAY + 1), u('copy', 'u1', 'ip1', TODAY + 2), u('copy', 'u1', 'ip1', TODAY + 3)])
+test('复制 3 条后 → 拒（COPY_LIMIT）', () => {
+  const r = limits.checkCopy(copyDb, 'u1', NOW, CFG)
+  assert.equal(r.code, 'COPY_LIMIT')
+})
+test('复制 2 条 → 放行且余 0', () => {
+  const r = limits.checkCopy(fakeDb([u('copy', 'u1', 'ip1', TODAY + 1), u('copy', 'u1', 'ip1', TODAY + 2)]), 'u1', NOW, CFG)
+  assert.ok(r.ok) && assert.equal(r.remaining, 0)
+})
+test('quotaInfo 统计今日用量', () => {
+  const q = limits.quotaInfo(fakeDb([u('analyze', 'u1', 'ip1', TODAY + 1), u('copy', 'u1', 'ip1', TODAY + 2)]), 'u1', 'ip1', NOW, CFG)
+  assert.equal(q.analyze.remaining, 2) && assert.equal(q.copies.remaining, 2)
+})
+
+console.log('\n== 单测：身份与 IP ==')
+const fakeReq = (headers) => ({ headers, socket: { remoteAddress: '10.0.0.1' } })
+test('默认不信任 X-Real-IP / X-Forwarded-For（防伪造绕过 IP 限制）', () => {
+  assert.equal(auth.clientIp(fakeReq({ 'x-real-ip': '1.2.3.4', 'x-forwarded-for': '5.6.7.8' })), '10.0.0.1')
+})
+test('TRUST_PROXY=1 时才取代理头', () => {
+  config.TRUST_PROXY = true
+  try {
+    assert.equal(auth.clientIp(fakeReq({ 'x-forwarded-for': '5.6.7.8, 10.0.0.2' })), '5.6.7.8')
+  } finally {
+    config.TRUST_PROXY = false
+  }
+})
+
+console.log('\n== 单测：检索 ==')
+const reqForRetrieval = { id: 'R1', text: '精通 Kubernetes 容器编排', skill: 'kubernetes' }
+test('别名命中排第一', () => {
+  const ids = retrieveCandidates(reqForRetrieval, [
+    { id: 'S1', text: '负责业务开发' },
+    { id: 'S2', text: '部署于 k8s 集群' },
+    { id: 'S3', text: '编写文档' }
+  ])
+  assert.equal(ids[0], 'S2')
+})
+
+console.log('\n== 集成：mock 流水线（examples 简历 + JD）==')
+  ; (async () => {
+    await testAsync('配了 AppID 时不传 code 拿不到设备身份（openid 不可绕过）', async () => {
+      config.WX_APPID = 'wx_test'
+      config.WX_APPSECRET = 'secret'
+      try {
+        assert.equal(await auth.identityFor({ deviceId: 'dabcdefgh123' }), null)
+      } finally {
+        config.WX_APPID = ''
+        config.WX_APPSECRET = ''
+      }
+    })
+    await testAsync('未配 AppID 时设备 ID 兜底可用', async () => {
+      assert.deepEqual(await auth.identityFor({ deviceId: 'dabcdefgh123' }), { sub: 'd:dabcdefgh123', kind: 'device' })
+    })
+
+    // 起一个本地假 LLM，验证重试策略
+    const withFakeLLM = async (status, fn) => {
+      let hits = 0
+      const srv = http.createServer((req, res) => {
+        hits++
+        req.resume()
+        res.writeHead(status, { 'Content-Type': 'application/json' })
+        res.end(status === 200 ? JSON.stringify({ choices: [{ message: { content: 'no json here' } }] }) : '{}')
+      })
+      await new Promise((r) => srv.listen(0, '127.0.0.1', r))
+      const saved = { base: config.LLM_API_BASE, key: config.LLM_API_KEY, retries: config.LLM_RETRIES }
+      config.LLM_API_BASE = `http://127.0.0.1:${srv.address().port}`
+      config.LLM_API_KEY = 'test'
+      config.LLM_RETRIES = 2
+      try {
+        await fn(() => hits)
+      } finally {
+        config.LLM_API_BASE = saved.base
+        config.LLM_API_KEY = saved.key
+        config.LLM_RETRIES = saved.retries
+        srv.close()
+      }
+    }
+    await testAsync('LLM 401 不重试（key 错重试也没用）', () =>
+      withFakeLLM(401, async (hits) => {
+        await assert.rejects(llm.chat({ system: 's', user: 'u' }), /LLM_HTTP_401/)
+        assert.equal(hits(), 1)
+      })
+    )
+    await testAsync('LLM 传输错误不被内容层重试叠加（5xx 共 3 次而非 9 次）', () =>
+      withFakeLLM(503, async (hits) => {
+        await assert.rejects(llm.withShapeRetry(() => llm.chatJSON({ system: 's', user: 'u' }), 2), /LLM_HTTP_503/)
+        assert.equal(hits(), 3)
+      })
+    )
+    await testAsync('内容层错误（JSON 抠不出来）会重试', () =>
+      withFakeLLM(200, async (hits) => {
+        await assert.rejects(llm.withShapeRetry(() => llm.chatJSON({ system: 's', user: 'u' }), 2), /LLM_JSON_NOT_FOUND/)
+        assert.equal(hits(), 3)
+      })
+    )
+    await testAsync('超过 deadline 直接放弃，不发请求', () =>
+      withFakeLLM(200, async (hits) => {
+        await assert.rejects(llm.chat({ system: 's', user: 'u', deadline: Date.now() - 1 }), /LLM_DEADLINE/)
+        assert.equal(hits(), 0)
+      })
+    )
+
+    // ---- 判定批次独立：部分失败不拖垮整份报告 ----
+    const { judgeRequirements } = require(S('judge'))
+    const mkReqs = (n) => Array.from({ length: n }, (_, i) => ({ id: 'R' + (i + 1), text: '要求' + (i + 1), category: 'skills', weight: 1 }))
+    const judgeSpans = [{ id: 'S1', section: 'skills', text: '会 Java' }]
+    const withJudgeLLM = async (failWhen, fn) => {
+      const srv = http.createServer((req, res) => {
+        let body = ''
+        req.on('data', (c) => (body += c))
+        req.on('end', () => {
+          const user = JSON.parse(body).messages[1].content
+          if (failWhen(user)) {
+            res.writeHead(400)
+            return res.end('{}')
+          }
+          const ids = [...user.matchAll(/^(R\d+) \[/gm)].map((m) => m[1])
+          const content = JSON.stringify({ judgments: ids.map((id) => ({ req_id: id, verdict: 'miss', quote: '', quote_id: '', reason: 'x' })) })
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ choices: [{ message: { content } }] }))
+        })
+      })
+      await new Promise((r) => srv.listen(0, '127.0.0.1', r))
+      const saved = { base: config.LLM_API_BASE, key: config.LLM_API_KEY, mock: config.LLM_MOCK }
+      Object.assign(config, { LLM_API_BASE: `http://127.0.0.1:${srv.address().port}`, LLM_API_KEY: 'test', LLM_MOCK: false })
+      try {
+        await fn()
+      } finally {
+        Object.assign(config, { LLM_API_BASE: saved.base, LLM_API_KEY: saved.key, LLM_MOCK: saved.mock })
+        srv.close()
+      }
+    }
+    await testAsync('判定：1 个批次失败只影响该批，其余正常返回', () =>
+      withJudgeLLM((u) => u.includes('R9 ['), async () => {
+        const r = await judgeRequirements(judgeSpans, mkReqs(10), new Map())
+        assert.equal(r.judgments.length, 8)
+        assert.deepEqual(r.failedReqIds, ['R9', 'R10'])
+        const v = verifyJudgments(mkReqs(10), judgeSpans, r.judgments, [], r.failedReqIds)
+        assert.ok(v[8].flags.includes('judge_failed') && v[8].verdict === 'unclear')
+      })
+    )
+    await testAsync('判定单独用 LLM_JUDGE_MODEL，拆解仍用主模型', async () => {
+      const seen = []
+      const srv = http.createServer((req, res) => {
+        let body = ''
+        req.on('data', (c) => (body += c))
+        req.on('end', () => {
+          const b = JSON.parse(body)
+          const user = b.messages[1].content
+          const kind = user.includes('<job_description>') ? 'split' : 'judge'
+          seen.push(kind + ':' + b.model)
+          const content = kind === 'split'
+            ? JSON.stringify({ requirements: [{ text: '会 Java', jd_quote: '会 Java', category: 'skills', weight: 1 }] })
+            : JSON.stringify({ judgments: [{ req_id: 'R1', verdict: 'miss', quote: '', quote_id: '', reason: 'x' }] })
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ choices: [{ message: { content } }] }))
+        })
+      })
+      await new Promise((r) => srv.listen(0, '127.0.0.1', r))
+      const keys = ['LLM_API_BASE', 'LLM_API_KEY', 'LLM_MOCK', 'LLM_MODEL', 'LLM_JUDGE_MODEL']
+      const saved = Object.fromEntries(keys.map((k) => [k, config[k]]))
+      Object.assign(config, {
+        LLM_API_BASE: `http://127.0.0.1:${srv.address().port}`, LLM_API_KEY: 'test', LLM_MOCK: false,
+        LLM_MODEL: 'small-model', LLM_JUDGE_MODEL: 'big-model'
+      })
+      try {
+        await runPipeline('工作经历\n会 Java 开发，三年经验，负责后端服务', '岗位要求：会 Java')
+        assert.deepEqual(seen, ['split:small-model', 'judge:big-model'])
+        // 不设判定模型 → 回落到主模型
+        seen.length = 0
+        config.LLM_JUDGE_MODEL = ''
+        await runPipeline('工作经历\n会 Java 开发，三年经验，负责后端服务', '岗位要求：会 Java')
+        assert.deepEqual(seen, ['split:small-model', 'judge:small-model'])
+      } finally {
+        Object.assign(config, saved)
+        srv.close()
+      }
+    })
+    await testAsync('判定：失败比例过高时整份失败（报告已无参考价值）', () =>
+      withJudgeLLM((u) => u.includes('R1 ['), async () => {
+        await assert.rejects(judgeRequirements(judgeSpans, mkReqs(10), new Map()))
+      })
+    )
+
+    const resumeText = fs.readFileSync(path.join(ROOT, 'examples', 'resume.txt'), 'utf8')
+    const jdText = fs.readFileSync(path.join(ROOT, 'examples', 'jd.txt'), 'utf8')
+
+    const result = await runPipeline(resumeText, jdText)
+
+    test('拆出 ≥3 条要求', () => assert.ok(result.requirements.length >= 3))
+    test('每条要求的 jd_quote 都在 JD 原文中', () => {
+      for (const r of result.requirements) assert.ok(jdText.includes(r.jdQuote), `${r.id} quote 不在 JD: ${r.jdQuote}`)
+    })
+    test('判定条数与要求一致', () => assert.equal(result.judgments.length, result.requirements.length))
+    test('每条 hit/partial 的引用都能在简历中逐字找到（护城河不漏）', () => {
+      for (const j of result.judgments) {
+        if (j.verdict === 'hit' || j.verdict === 'partial') {
+          assert.ok(j.quote, `${j.reqId} 无引用`)
+          assert.ok(j.quoteId.startsWith('S'), `${j.reqId} quote_id 异常`)
+          assert.ok(resumeText.includes(j.quote), `${j.reqId} 引用不在原文: ${j.quote}`)
+        }
+      }
+    })
+    test('联系方式已被脱敏，不进模型上下文', () => {
+      const leaked = result.judgments.some((j) => j.quote.includes('13812345678') || j.quote.includes('zhangsan@example.com'))
+      assert.ok(!leaked)
+      const spansLeak = JSON.stringify(result.spans)
+      assert.ok(!spansLeak.includes('13812345678') && !spansLeak.includes('zhangsan@example.com'))
+    })
+    test('分数 0~100', () => assert.ok(result.score.overall >= 0 && result.score.overall <= 100))
+    test('一句话结论存在', () => assert.ok(result.conclusion && result.conclusion.length >= 8))
+    test('spans 已留存（引用上下文弹层数据源）', () => {
+      assert.ok(Array.isArray(result.spans) && result.spans.length === result.spanCount)
+      assert.ok(result.spans.every((s) => s.id && s.text))
+    })
+
+    const again = await runPipeline(resumeText, jdText)
+    test('全链路确定性（两次同分同结论）', () => {
+      assert.equal(again.score.overall, result.score.overall)
+      assert.equal(again.conclusion, result.conclusion)
+    })
+
+    await testAsync('JD 拆解缓存：命中时跳过拆解，结果一致', async () => {
+      const store = new Map()
+      const cache = { get: (k) => store.get(k) || null, set: (k, v) => store.set(k, v) }
+      const first = await runPipeline(resumeText, jdText, { jdCache: cache })
+      assert.equal(first.jdCacheHit, false)
+      assert.equal(store.size, 1)
+      // 往缓存里塞一个可识别的结果，证明第二次确实用的是缓存
+      const marked = store.get(jdText).slice(0, 2)
+      store.set(jdText, marked)
+      const second = await runPipeline(resumeText, jdText, { jdCache: cache })
+      assert.equal(second.jdCacheHit, true)
+      assert.equal(second.requirements.length, 2)
+    })
+    await testAsync('进度回调按真实阶段触发', async () => {
+      const stages = []
+      await runPipeline(resumeText, jdText, { onStage: (st) => stages.push(st) })
+      assert.deepEqual(stages, ['split', 'judge', 'score'])
+    })
+
+    const rewrites = await proposeRewrites(result.requirements, result.judgments)
+    test('改写建议可生成且 improve 原句可溯源', () => {
+      for (const r of rewrites) {
+        if (r.type === 'improve') {
+          const j = result.judgments.find((x) => x.reqId === r.reqId)
+          assert.ok(j && quoteMatches(r.original, j.quote))
+        }
+      }
+    })
+
+    console.log('\n== 结果速览 ==')
+    console.log(`  片段数: ${result.spanCount}`)
+    console.log(`  要求数: ${result.requirements.length}（拒收 ${result.rejectionCount} 条）`)
+    const byVerdict = {}
+    for (const j of result.judgments) byVerdict[j.verdict] = (byVerdict[j.verdict] || 0) + 1
+    console.log(`  判定分布: ${JSON.stringify(byVerdict)}`)
+    console.log(`  总分: ${result.score.overall}${result.score.capped ? '（触发硬门槛封顶）' : ''}`)
+    console.log(`  结论: ${result.conclusion}`)
+    console.log(`  雷达: ${result.score.radar.map((r) => `${r.category}=${r.value}`).join(' ')}`)
+    console.log(`  改写建议: ${rewrites.length} 条`)
+
+    console.log(`\n结果：${passed} 通过，${failed} 失败`)
+    process.exit(failed > 0 ? 1 : 0)
+  })().catch((e) => {
+    console.error('集成测试崩溃：', e)
+    process.exit(1)
+  })

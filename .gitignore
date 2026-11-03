@@ -1,0 +1,11 @@
+# 运行时数据：含用户报告（脱敏简历片段）与签名密钥，绝不能入库
+data/
+*.tmp
+
+node_modules/
+server/node_modules/
+
+# 微信开发者工具的个人设置
+project.private.config.json
+
+.DS_Store

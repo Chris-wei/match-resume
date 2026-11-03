@@ -1,0 +1,33 @@
+.draft-watermark {
+  position: fixed;
+  top: 200rpx;
+  left: 50%;
+  transform: translateX(-50%) rotate(-12deg);
+  color: rgba(220, 38, 38, 0.16);
+  font-size: 80rpx;
+  font-weight: 700;
+  z-index: 10;
+  pointer-events: none;
+  letter-spacing: 8rpx;
+}
+
+.legal-section {
+  margin-top: 16rpx;
+}
+
+.legal-section view {
+  font-size: 26rpx;
+  color: var(--text-2);
+  line-height: 1.85;
+  margin-bottom: 10rpx;
+}
+
+.legal-h {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 28rpx;
+  padding-left: 16rpx;
+  border-left: 6rpx solid var(--primary);
+  line-height: 1.4;
+}

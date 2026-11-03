@@ -1,0 +1,94 @@
+<view class="page">
+  <!-- 简历 -->
+  <view class="card">
+    <view class="card-title">
+      <text class="title-num">1</text>你的简历
+      <text class="aside {{resume.length >= maxResume ? 'over' : ''}}">{{resume.length}}/{{maxResume}}</text>
+    </view>
+    <view class="tool-row">
+      <view class="tool" wx:if="{{pdfEnabled}}" bindtap="choosePdf" hover-class="tool-hover">
+        {{pdfBusy ? '解析中…' : '上传 PDF'}}
+      </view>
+      <view class="tool" data-field="resume" bindtap="pasteFromClipboard" hover-class="tool-hover">
+        粘贴
+      </view>
+      <view class="tool tool-muted" wx:if="{{resume.length}}" data-field="resume" bindtap="clearField" hover-class="tool-hover">清空</view>
+    </view>
+    <!-- 原生 textarea 会盖住弹层：弹层出现时换成静态文本 -->
+    <textarea wx:if="{{!overlay}}" class="input-area" value="{{resume}}" maxlength="{{maxResume}}"
+      bindinput="onResumeInput" always-embed="{{true}}" adjust-position="{{true}}" cursor-spacing="140"
+      placeholder="粘贴简历全文：工作经历、项目经历、技能清单" placeholder-class="ph"></textarea>
+    <view wx:else class="input-area input-static {{resume ? '' : 'ph'}}">{{resume || '粘贴简历全文：工作经历、项目经历、技能清单'}}</view>
+  </view>
+
+  <!-- JD -->
+  <view class="card">
+    <view class="card-title">
+      <text class="title-num">2</text>目标职位 JD
+      <text class="aside {{jd.length >= maxJD ? 'over' : ''}}">{{jd.length}}/{{maxJD}}</text>
+    </view>
+    <view class="tool-row">
+      <view class="tool" data-field="jd" bindtap="pasteFromClipboard" hover-class="tool-hover">
+        粘贴
+      </view>
+      <view class="tool tool-muted" wx:if="{{jd.length}}" data-field="jd" bindtap="clearField" hover-class="tool-hover">清空</view>
+    </view>
+    <textarea wx:if="{{!overlay}}" class="input-area jd" value="{{jd}}" maxlength="{{maxJD}}"
+      bindinput="onJDInput" always-embed="{{true}}" adjust-position="{{true}}" cursor-spacing="140"
+      placeholder="粘贴职位描述原文，任职要求越完整，分析越准" placeholder-class="ph"></textarea>
+    <view wx:else class="input-area jd input-static {{jd ? '' : 'ph'}}">{{jd || '粘贴职位描述原文，任职要求越完整，分析越准'}}</view>
+  </view>
+
+  <view class="privacy-tip" bindtap="goLegal">
+    🔒 联系方式与姓名会先脱敏再分析 · <text class="link">隐私政策</text>
+  </view>
+</view>
+
+<!-- 底部提交栏 -->
+<view class="submit-bar">
+  <view class="submit-meta" wx:if="{{quotaLeft !== null}}">
+    <block wx:if="{{quotaLeft > 0}}">今日还可免费分析 <text class="em">{{quotaLeft}}</text> 次</block>
+    <block wx:else>今日免费次数已用完，明天再来</block>
+  </view>
+  <button class="btn-primary" bindtap="startAnalyze" disabled="{{analyzing || quotaLeft === 0}}">
+    {{analyzing ? '分析中…' : '开始分析'}}
+  </button>
+</view>
+
+<!-- 首次使用隐私确认 -->
+<view class="modal-mask center" wx:if="{{showAgree}}">
+  <view class="dialog">
+    <view class="dialog-icon">🔒</view>
+    <view class="dialog-title">使用前请确认</view>
+    <view class="dialog-body">
+      <view class="dialog-line">联系方式、证件号、姓名会在分析前替换为占位符，模型看不到</view>
+      <view class="dialog-line">报告里保存的是脱敏后的简历内容，30 天自动删除，可随时手动删除</view>
+      <view class="dialog-line">文本会发送给承诺「不用于训练」的大模型服务处理</view>
+    </view>
+    <view class="dialog-link" bindtap="goLegal">查看完整《隐私政策与用户协议》›</view>
+    <checkbox-group bindchange="checkAgree">
+      <label class="dialog-check">
+        <checkbox value="yes" checked="{{agreed}}" color="#3b5bfd" />我已阅读并同意
+      </label>
+    </checkbox-group>
+    <button class="btn-primary" bindtap="confirmAgree">同意并继续</button>
+  </view>
+</view>
+
+<!-- 分析进度：真实阶段（来自服务端任务状态） -->
+<view class="modal-mask center" wx:if="{{analyzing}}">
+  <view class="progress">
+    <view class="progress-title">正在生成报告</view>
+    <view class="progress-sub">已用时 {{elapsed}} 秒 · 通常 20~40 秒</view>
+    <view class="steps">
+      <view wx:for="{{steps}}" wx:key="key" class="pstep pstep-{{item.state}}">
+        <view class="pstep-dot">
+          <text wx:if="{{item.state === 'done'}}">✓</text>
+          <view wx:elif="{{item.state === 'active'}}" class="spinner"></view>
+        </view>
+        <text class="pstep-text">{{item.title}}</text>
+      </view>
+    </view>
+    <view class="progress-tip">可以先离开，完成后在首页「我的报告」查看</view>
+  </view>
+</view>

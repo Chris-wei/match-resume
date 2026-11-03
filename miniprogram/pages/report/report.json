@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "匹配报告",
+  "usingComponents": {
+    "radar": "/components/radar/radar"
+  }
+}

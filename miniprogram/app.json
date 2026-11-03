@@ -1,0 +1,18 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/analyze/analyze",
+    "pages/report/report",
+    "pages/legal/legal"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#f4f5f9",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "简历匹配分析",
+    "backgroundColor": "#f4f5f9",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

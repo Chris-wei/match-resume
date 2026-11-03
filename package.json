@@ -1,0 +1,13 @@
+{
+  "name": "ai-resume",
+  "version": "0.2.0",
+  "private": true,
+  "description": "AI 简历分析：本地 Node 服务 + 微信小程序（粘贴简历+JD，每条判断可溯源）",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node scripts/test-local.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

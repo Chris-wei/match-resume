@@ -1,0 +1,183 @@
+<view wx:if="{{loading}}" class="state-box">
+  <view class="pulse-dot"></view>
+  <text class="text-2">报告加载中…</text>
+</view>
+
+<view wx:elif="{{errorText}}" class="state-box">
+  <view class="state-icon">!</view>
+  <text class="state-text">{{errorText}}</text>
+  <button class="btn-ghost state-btn" bindtap="goHome">返回首页</button>
+</view>
+
+<block wx:else>
+  <!-- 总分 + 一句话结论 -->
+  <view class="card summary">
+    <view class="summary-top">
+      <view class="ring" style="background: conic-gradient({{scoreColor}} {{report.score.overall}}%, #eef0f4 0)">
+        <view class="ring-inner">
+          <text class="ring-num" style="color: {{scoreColor}}">{{report.score.overall}}</text>
+          <text class="ring-label">匹配分</text>
+        </view>
+      </view>
+      <view class="summary-side">
+        <view class="conclusion">{{report.conclusion}}</view>
+      </view>
+    </view>
+    <view wx:if="{{report.score.capped}}" class="notice notice-danger cap">
+      <text>⚠</text><text>存在硬性年限要求缺失，分数已封顶 60 分</text>
+    </view>
+    <!-- 判定分布：点击即筛选下方列表 -->
+    <view class="stats">
+      <view wx:for="{{stats}}" wx:key="key" class="stat stat-{{item.key}} {{filter === item.key ? 'stat-on' : ''}}"
+        data-key="{{item.key}}" bindtap="onFilter">
+        <text class="stat-num">{{item.count}}</text>
+        <text class="stat-label">{{item.label}}</text>
+      </view>
+    </view>
+    <view class="meta">
+      {{report.createdAtText}} 生成
+      <text wx:if="{{report.mock}}" class="mock-badge">演示模式 · 未接模型</text>
+    </view>
+  </view>
+
+  <!-- 雷达 -->
+  <view class="card" wx:if="{{radarData.length}}">
+    <view class="card-title">五个维度<text class="aside">灰色维度表示 JD 未提及</text></view>
+    <radar class="radar" data="{{radarData}}" />
+  </view>
+
+  <!-- 逐条判定 -->
+  <view class="card">
+    <view class="card-title">逐条判定<text class="aside">{{visibleJudgments.length}}/{{judgments.length}} 条</text></view>
+    <scroll-view scroll-x class="tabs">
+      <view wx:for="{{tabs}}" wx:key="key" class="tab {{filter === item.key ? 'tab-on' : ''}}" data-key="{{item.key}}" bindtap="onFilter">
+        {{item.label}}<text class="tab-count" wx:if="{{item.count !== null}}">{{item.count}}</text>
+      </view>
+    </scroll-view>
+
+    <view wx:if="{{visibleJudgments.length === 0}}" class="empty text-3">这一类没有条目</view>
+    <view class="judge-list">
+    <view wx:for="{{visibleJudgments}}" wx:key="reqId" class="judge v-{{item.verdict}}">
+      <view class="judge-head">
+        <text class="tag tag-{{item.verdict}}">{{item.verdictText}}</text>
+        <text class="judge-cat">{{item.req.categoryText}}</text>
+      </view>
+      <view class="judge-req">{{item.req.text}}</view>
+      <view class="reason" wx:if="{{item.reason}}">{{item.reason}}</view>
+
+      <view class="quote quote-resume" wx:if="{{item.quote}}" data-id="{{item.quoteId}}" bindtap="onQuoteTap" hover-class="quote-hover">
+        <view class="quote-src">
+          <text>简历原文 · {{item.quoteId}}</text>
+          <text wx:if="{{item.fuzzy}}" class="fuzzy">近似引用，展示整行</text>
+          <text class="quote-more">看上下文 ›</text>
+        </view>
+        <view class="quote-text">{{item.quote}}</view>
+      </view>
+      <view class="quote quote-jd" wx:if="{{item.req.showJdQuote}}">
+        <view class="quote-src"><text>JD 原文</text></view>
+        <view class="quote-text">{{item.req.jdQuote}}</view>
+      </view>
+      <view class="unclear-tip" wx:if="{{item.verdict === 'unclear'}}">证据不充分，建议对照简历自行核对</view>
+    </view>
+    </view>
+  </view>
+
+  <!-- 改写建议 -->
+  <view class="card">
+    <view class="card-title">改写建议
+      <text class="aside" wx:if="{{rewritesStatus === 'done' && rewrites.length && copiesLeft !== null}}">今日可复制 {{copiesLeft}}/{{copyLimit}} 条</text>
+    </view>
+
+    <block wx:if="{{rewritesStatus === 'pending'}}">
+      <view class="notice notice-info"><view class="pulse-dot small"></view><text>正在根据缺失和部分满足的条目生成改写建议…</text></view>
+      <view class="sk-item" wx:for="{{[1, 2]}}" wx:key="*this">
+        <view class="skeleton sk-line w30"></view>
+        <view class="skeleton sk-block"></view>
+        <view class="skeleton sk-line w60"></view>
+      </view>
+    </block>
+
+    <view wx:elif="{{rewritesStatus === 'failed'}}" class="notice notice-warn">
+      <text>改写建议这次没生成出来。重新提交同一份简历和 JD 可以补生成，不扣次数。</text>
+    </view>
+
+    <block wx:elif="{{rewrites.length > 0}}">
+      <view class="rw-list">
+      <view wx:for="{{rewrites}}" wx:key="index" class="rw">
+        <view class="rw-head">
+          <text class="rw-type rw-{{item.type}}">{{item.type === 'improve' ? '改写这句' : '建议补充'}}</text>
+          <text class="rw-req" wx:if="{{item.reqText}}">对应：{{item.reqText}}</text>
+        </view>
+        <view class="rw-original" wx:if="{{item.original}}">{{item.original}}</view>
+        <view class="rw-arrow" wx:if="{{item.original}}">↓</view>
+        <view class="rw-new">{{item.rewrite}}</view>
+        <view class="rw-foot">
+          <text class="rw-note" wx:if="{{item.note}}">{{item.note}}</text>
+          <button class="btn-ghost rw-copy" data-index="{{index}}" bindtap="copyRewrite"
+            disabled="{{copiesLeft === 0 && !item.copied}}">{{item.copied ? '再复制' : copiesLeft === 0 ? '今日已用完' : '复制'}}</button>
+        </view>
+      </view>
+      </view>
+      <view class="rw-tip">【】里是需要你自己填的真实信息，改写不会编造经历</view>
+    </block>
+
+    <view wx:else class="empty-good">
+      <text class="empty-good-icon">✓</text>
+      <text>没有缺失或部分满足的条目，这份简历和 JD 吻合得不错</text>
+    </view>
+  </view>
+
+  <!-- 底部操作 -->
+  <view class="bottom">
+    <button class="btn-ghost" bindtap="openFeedback">
+      {{feedback.submitted ? '✓ 已反馈，感谢帮助改进' : '这份报告准吗？告诉我'}}
+    </button>
+    <view class="bottom-links">
+      <text bindtap="goAnalyze">再分析一份</text>
+      <text class="sep">·</text>
+      <text class="danger" bindtap="deleteReport">删除这份报告</text>
+    </view>
+  </view>
+
+  <!-- 引用上下文弹层 -->
+  <view class="modal-mask" wx:if="{{context.visible}}" bindtap="closeContext">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-handle"></view>
+      <view class="sheet-title">{{context.title}}</view>
+      <view class="ctx">
+        <view class="ctx-line {{line.id === context.spanId ? 'ctx-cited' : ''}}" wx:for="{{context.lines}}" wx:for-item="line" wx:key="id">
+          <text class="ctx-id">{{line.id}}</text>
+          <text class="ctx-text">{{line.text}}</text>
+        </view>
+      </view>
+      <view class="text-3 sheet-tip">高亮行是引用出处，上下各展示 2 行</view>
+      <button class="btn-ghost" bindtap="closeContext">知道了</button>
+    </view>
+  </view>
+
+  <!-- 反馈弹层 -->
+  <view class="modal-mask" wx:if="{{feedback.visible}}" bindtap="closeFeedback">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-handle"></view>
+      <view class="sheet-title">这份报告准吗？</view>
+      <view wx:if="{{feedback.submitted}}" class="fb-done">你已提交过反馈，感谢帮助改进！</view>
+      <block wx:else>
+        <view class="fb-q">报告的判断准吗？<text class="fb-req">*</text></view>
+        <view class="fb-group">
+          <view wx:for="{{fbQ1}}" wx:key="value" class="fb-opt {{feedback.q1 === item.value ? 'fb-on' : ''}}"
+            data-q="q1" data-value="{{item.value}}" bindtap="onFbPick">{{item.label}}</view>
+        </view>
+        <view class="fb-q">对你最有用的是？</view>
+        <view class="fb-group">
+          <view wx:for="{{fbQ2}}" wx:key="value" class="fb-opt {{feedback.q2 === item.value ? 'fb-on' : ''}}"
+            data-q="q2" data-value="{{item.value}}" bindtap="onFbPick">{{item.label}}</view>
+        </view>
+        <view class="fb-q">改进建议</view>
+        <textarea class="fb-textarea" value="{{feedback.comment}}" bindinput="onFbComment"
+          maxlength="300" always-embed="{{true}}" placeholder-class="ph"
+          placeholder="哪条判错了、还想要什么功能，都可以写在这里"></textarea>
+        <button class="btn-primary fb-submit" bindtap="submitFeedback">提交反馈</button>
+      </block>
+    </view>
+  </view>
+</block>

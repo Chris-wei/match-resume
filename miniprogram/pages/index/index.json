@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "简历匹配分析",
+  "usingComponents": {
+    "radar": "/components/radar/radar"
+  }
+}

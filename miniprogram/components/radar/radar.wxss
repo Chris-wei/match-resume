@@ -1,0 +1,16 @@
+/* 同层 canvas 必须在布局稳定后创建，且用定尺寸容器包裹：
+   百分比/外边距直接写在 canvas 上会在 iOS 上诱发错位与滚动抖动 */
+:host {
+  display: block;
+  width: 100%;
+}
+
+.radar-box {
+  margin: 0 auto;
+}
+
+.radar-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

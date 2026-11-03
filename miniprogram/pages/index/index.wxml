@@ -1,0 +1,70 @@
+<view class="hero">
+  <view class="hero-eyebrow">简历 × 职位描述 · 逐条匹配</view>
+  <view class="hero-title">30 秒看清<text class="hero-accent">简历差在哪</text></view>
+  <view class="hero-sub">粘贴简历和 JD，生成一份每条判断都能点回原文的匹配报告，附可直接复制的改写建议。</view>
+  <view class="hero-points">
+    <view class="hero-point"><text class="hp-icon">✓</text>每条判断附简历原文出处</view>
+    <view class="hero-point"><text class="hp-icon">✓</text>分数由规则计算，同一输入同一分</view>
+    <view class="hero-point"><text class="hp-icon">✓</text>联系方式、姓名自动脱敏</view>
+  </view>
+  <button class="btn-primary hero-cta" bindtap="goAnalyze">免费开始分析</button>
+  <view class="hero-quota" wx:if="{{quotaLeft !== null}}">
+    今日剩余 <text class="hero-quota-num">{{quotaLeft}}</text>/{{quotaLimit}} 次免费分析
+  </view>
+</view>
+
+<view class="card" wx:if="{{reports.length > 0}}">
+  <view class="card-title">我的报告<text class="aside">保留 30 天</text></view>
+  <view class="report-list">
+  <view class="report-item" wx:for="{{reports}}" wx:key="reportId" data-id="{{item.reportId}}" bindtap="goReport" hover-class="report-item-hover">
+    <view class="report-score lvl-{{item.level}}">{{item.overall}}</view>
+    <view class="report-info">
+      <view class="report-conclusion">{{item.conclusion}}</view>
+      <view class="text-3">{{item.createdAtText}}</view>
+    </view>
+    <text class="chevron">›</text>
+  </view>
+  </view>
+</view>
+
+<view class="card">
+  <view class="card-title">报告长这样<text class="aside">示例</text></view>
+  <view class="sample-row">
+    <view class="ring" style="background: conic-gradient(var(--primary) 72%, var(--primary-soft) 0)">
+      <view class="ring-inner">
+        <text class="ring-num">72</text>
+        <text class="ring-label">匹配分</text>
+      </view>
+    </view>
+    <view class="sample-radar"><radar data="{{sampleRadar}}" size="320" /></view>
+  </view>
+  <view class="sample-list">
+    <view class="sample-item"><text class="tag tag-hit">满足</text><text class="sample-text">3 年以上 Java 后端开发</text></view>
+    <view class="sample-item"><text class="tag tag-partial">部分</text><text class="sample-text">有 K8s 部署经验</text></view>
+    <view class="sample-item"><text class="tag tag-miss">缺失</text><text class="sample-text">性能优化的量化成果</text></view>
+  </view>
+</view>
+
+<view class="card">
+  <view class="card-title">三步拿到报告</view>
+  <view class="steps">
+    <view class="step">
+      <view class="step-num">1</view>
+      <view class="step-body"><view class="step-h">放入简历</view><view class="text-3">粘贴全文，或上传 PDF 自动提取</view></view>
+    </view>
+    <view class="step">
+      <view class="step-num">2</view>
+      <view class="step-body"><view class="step-h">粘贴目标 JD</view><view class="text-3">任职要求越完整，判断越准</view></view>
+    </view>
+    <view class="step">
+      <view class="step-num">3</view>
+      <view class="step-body"><view class="step-h">看报告、改简历</view><view class="text-3">缺什么、哪句该改，一目了然</view></view>
+    </view>
+  </view>
+</view>
+
+<view class="footer">
+  <view class="footer-links"><text bindtap="goLegal">隐私政策与用户协议</text></view>
+  <view class="footer-note">完全免费 · 每天 {{quotaLimit || 3}} 次分析 · 改写建议每天可一键复制 3 条</view>
+  <view class="footer-note">联系方式与姓名自动脱敏 · 报告 30 天自动删除</view>
+</view>

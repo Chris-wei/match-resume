@@ -1,0 +1,13 @@
+{
+  "name": "ai-resume-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI 简历分析本地服务：零依赖 HTTP 服务 + 流水线（仅 pdfjs-dist 一个可选依赖）",
+  "main": "index.js",
+  "dependencies": {
+    "pdfjs-dist": "3.11.174"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
