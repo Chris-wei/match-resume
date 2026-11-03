@@ -128,6 +128,20 @@ const reqs = verifyRequirements(
 )
 test('未在 JD 中的 quote 被拒收', () => assert.equal(reqs.length, 1) && assert.equal(rejections.length, 1))
 test('id 重排', () => assert.equal(reqs[0].id, 'R1'))
+test('文本相同的要求去重（只差标点空格也算重复）', () => {
+  const rej = []
+  const out = verifyRequirements(
+    '熟悉 MySQL、Redis、Kafka',
+    [
+      { text: '熟悉 MySQL、Redis、Kafka', jd_quote: '熟悉 MySQL、Redis、Kafka', category: 'skills', weight: 1 },
+      { text: '熟悉MySQL、Redis、Kafka。', jd_quote: '熟悉 MySQL、Redis、Kafka', category: 'skills', weight: 1 },
+      { text: '熟悉 Kafka', jd_quote: 'Kafka', category: 'skills', weight: 1 }
+    ],
+    rej
+  )
+  assert.deepEqual(out.map((r) => r.text), ['熟悉 MySQL、Redis、Kafka', '熟悉 Kafka'])
+  assert.equal(rej[0].reason, '与前面的要求重复')
+})
 
 console.log('\n== 单测：判定校验（降级 unclear）==')
 const jRej = []
@@ -234,6 +248,17 @@ test('quotaInfo 统计今日用量', () => {
   const q = limits.quotaInfo(fakeDb([u('analyze', 'u1', 'ip1', TODAY + 1), u('copy', 'u1', 'ip1', TODAY + 2)]), 'u1', 'ip1', NOW, CFG)
   assert.equal(q.analyze.remaining, 2) && assert.equal(q.copies.remaining, 2)
 })
+
+console.log('\n== 单测：模型输出 JSON 抽取 ==')
+test('裸数组也能解析（千问偶尔不包外层对象）', () => {
+  const out = llm.extractJSON('[\n {"id":"R1","text":"a"},\n {"id":"R2","text":"b"}\n]')
+  assert.deepEqual(llm.listFrom(out, 'requirements').map((r) => r.id), ['R1', 'R2'])
+})
+test('围栏 + 结尾多余内容 + 字符串里的括号', () => {
+  const out = llm.extractJSON('```json\n{"judgments":[{"reason":"含 } 和 ] 的理由"}]}\n```\n补充说明 {x}')
+  assert.equal(llm.listFrom(out, 'judgments')[0].reason, '含 } 和 ] 的理由')
+})
+test('包了外层对象照常取 key', () => assert.equal(llm.listFrom({ rewrites: [1] }, 'rewrites').length, 1))
 
 console.log('\n== 单测：身份与 IP ==')
 const fakeReq = (headers) => ({ headers, socket: { remoteAddress: '10.0.0.1' } })

@@ -4,14 +4,14 @@
 const fs = require('fs')
 const path = require('path')
 const config = require('./config')
-const { chatJSON, withShapeRetry } = require('./llm')
+const { chatJSON, withShapeRetry, listFrom } = require('./llm')
 const mock = require('./mock')
 
 const SYSTEM = fs.readFileSync(path.join(__dirname, 'prompts', 'jd-split.txt'), 'utf8')
 const CATEGORIES = ['skills', 'experience', 'projects', 'education', 'keywords']
 
 function normalizeRequirements(out) {
-  const list = out && Array.isArray(out.requirements) ? out.requirements : null
+  const list = listFrom(out, 'requirements')
   if (!list) throw new Error('JD_SPLIT_BAD_SHAPE')
   const norm = []
   for (const r of list) {

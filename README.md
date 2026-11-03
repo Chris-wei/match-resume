@@ -36,6 +36,8 @@ npm start                   # 或项目根目录 npm start / node server/index.j
 
 在启动服务的环境里设置（OpenAI 兼容协议均可）：
 
+**推荐用 `.env` 配置**（已在 `.gitignore` 里，key 不会进仓库）：`cp .env.example .env`，填上 `LLM_API_KEY` 即可，启动时自动读取。终端里 `export` 的同名变量优先于 `.env`。
+
 **上线推荐：阿里云百炼 · 千问**（中文强、JSON 稳、每次分析约几分钱；关闭思考模式，否则容易超出 75s 时限）
 
 ```bash

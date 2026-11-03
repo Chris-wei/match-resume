@@ -1,13 +1,21 @@
 // 步骤⑥：引用校验（纯代码）。这是整个产品的护城河——
 // LLM 的每条判断必须能在原文里逐字找到引用，找不到就降级 unclear，绝不回退给模型圆谎。
 
-const { locateQuote } = require('./text')
+const { locateQuote, normalize } = require('./text')
 
 // ---- JD 拆解校验：jd_quote 必须真的在 JD 里，否则拒收这条要求 ----
 function verifyRequirements(jdText, rawRequirements, rejections) {
   const requirements = []
+  const seenText = new Set()
   for (const r of rawRequirements) {
     if (!r || typeof r.text !== 'string' || !r.text.trim()) continue
+    // 去重兜底：模型偶尔把一句拆成多条却给出相同 text，重复条目会被重复计分、拉偏总分
+    const textKey = normalize(r.text).replace(/[\s\p{P}]/gu, '')
+    if (seenText.has(textKey)) {
+      rejections.push({ stage: 'jd', reason: '与前面的要求重复', text: r.text })
+      continue
+    }
+    seenText.add(textKey)
     const loc = typeof r.jd_quote === 'string' ? locateQuote(r.jd_quote, jdText) : null
     if (!loc) {
       rejections.push({ stage: 'jd', reason: 'jd_quote 未在 JD 原文中找到', text: r.text })

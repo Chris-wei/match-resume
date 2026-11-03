@@ -4,7 +4,7 @@
 const fs = require('fs')
 const path = require('path')
 const config = require('./config')
-const { chatJSON } = require('./llm')
+const { chatJSON, listFrom } = require('./llm')
 const { quoteMatches } = require('./text')
 const mock = require('./mock')
 
@@ -36,7 +36,7 @@ async function proposeRewrites(requirements, judgments, { deadline } = {}) {
     if (!lines) return []
 
     const out = await chatJSON({ system: SYSTEM, user: lines, maxTokens: 3000, deadline })
-    list = out && Array.isArray(out.rewrites) ? out.rewrites : []
+    list = listFrom(out, 'rewrites') || []
   }
 
   const out = []

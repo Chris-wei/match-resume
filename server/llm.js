@@ -84,14 +84,42 @@ function requestOnce(urlStr, apiKey, body, timeoutMs) {
   })
 }
 
-/** 从模型回复里抠出 JSON：容忍 ```json 围栏和前后废话。 */
+/**
+ * 从模型回复里抠出第一个完整的 JSON 值（对象或数组）：
+ * 容忍 ```json 围栏、前后废话、结尾多余内容；用括号配对（跳过字符串里的括号）找到它的结尾。
+ */
 function extractJSON(content) {
   let s = String(content).trim()
   s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-  const start = s.indexOf('{')
-  const end = s.lastIndexOf('}')
-  if (start === -1 || end === -1 || end <= start) throw new Error('LLM_JSON_NOT_FOUND')
-  return JSON.parse(s.slice(start, end + 1))
+  const objAt = s.indexOf('{')
+  const arrAt = s.indexOf('[')
+  const start = objAt === -1 ? arrAt : arrAt === -1 ? objAt : Math.min(objAt, arrAt)
+  if (start === -1) throw new Error('LLM_JSON_NOT_FOUND')
+  let depth = 0
+  let inStr = false
+  let esc = false
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (ch === '\\') esc = true
+      else if (ch === '"') inStr = false
+      continue
+    }
+    if (ch === '"') inStr = true
+    else if (ch === '{' || ch === '[') depth++
+    else if (ch === '}' || ch === ']') {
+      depth--
+      if (depth === 0) return JSON.parse(s.slice(start, i + 1))
+    }
+  }
+  throw new Error('LLM_JSON_UNTERMINATED')
+}
+
+/** 模型偶尔不按约定包一层 {"key": [...]}，直接给数组：两种形态都接受 */
+function listFrom(out, key) {
+  if (Array.isArray(out)) return out
+  return out && Array.isArray(out[key]) ? out[key] : null
 }
 
 function remainingMs(deadline) {
@@ -113,6 +141,7 @@ async function chat({ system, user, maxTokens, deadline, model }) {
     temperature: 0.1,
     max_tokens: maxTokens || 3000
   }
+  if (config.LLM_JSON_MODE) body.response_format = { type: 'json_object' }
   const url = config.LLM_API_BASE.replace(/\/$/, '') + '/chat/completions'
 
   let lastErr
@@ -156,4 +185,4 @@ async function withShapeRetry(fn, retries, fallbackMessage) {
   throw lastErr || new Error(fallbackMessage || 'LLM_SHAPE_FAILED')
 }
 
-module.exports = { chat, chatJSON, extractJSON, withShapeRetry, remainingMs }
+module.exports = { chat, chatJSON, extractJSON, listFrom, withShapeRetry, remainingMs }

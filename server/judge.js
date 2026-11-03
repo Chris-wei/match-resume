@@ -3,7 +3,7 @@
 const fs = require('fs')
 const path = require('path')
 const config = require('./config')
-const { chatJSON, withShapeRetry } = require('./llm')
+const { chatJSON, withShapeRetry, listFrom } = require('./llm')
 const { renderSpans } = require('./segment')
 const mock = require('./mock')
 
@@ -14,7 +14,7 @@ const VERDICTS = ['hit', 'partial', 'miss', 'unclear']
 const judgeModel = () => config.LLM_JUDGE_MODEL || config.LLM_MODEL
 
 function normalizeJudgments(out) {
-  const list = out && Array.isArray(out.judgments) ? out.judgments : null
+  const list = listFrom(out, 'judgments')
   if (!list) throw new Error('JUDGE_BAD_SHAPE')
   const norm = []
   for (const j of list) {

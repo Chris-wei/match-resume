@@ -87,10 +87,19 @@ const VALID_FB = {
 // ---------------- 缓存键 ----------------
 const { judgeModel } = require('./judge')
 
-// 报告缓存键要包含判定模型：换了判定模型，同一输入应重新分析而不是复用旧报告
-const modelTag = () => (config.LLM_MOCK ? 'mock' : `${config.LLM_MODEL}|judge=${judgeModel()}`)
-// JD 拆解只用主模型，缓存键不受判定模型影响（换判定模型不必作废 JD 缓存）
-const splitModelTag = () => (config.LLM_MOCK ? 'mock' : config.LLM_MODEL)
+// 提示词版本：改了提示词，缓存的 JD 拆解和可复用的报告都应作废（提示词在启动时读入，改完需重启）
+const fs = require('fs')
+const path = require('path')
+const promptHash = (...names) =>
+  db.sha256(names.map((n) => fs.readFileSync(path.join(__dirname, 'prompts', n), 'utf8')).join('\u0000')).slice(0, 12)
+const SPLIT_PROMPT_TAG = promptHash('jd-split.txt')
+const ALL_PROMPTS_TAG = promptHash('jd-split.txt', 'judge.txt', 'rewrite.txt')
+
+// 报告缓存键：主模型 + 判定模型 + 全部提示词版本，任一变化都重新分析，不复用旧报告
+const modelTag = () =>
+  config.LLM_MOCK ? 'mock' : `${config.LLM_MODEL}|judge=${judgeModel()}|prompts=${ALL_PROMPTS_TAG}`
+// JD 拆解缓存键：只看主模型 + 拆解提示词（换判定模型/判定提示词不必作废 JD 缓存）
+const splitModelTag = () => (config.LLM_MOCK ? 'mock' : `${config.LLM_MODEL}|prompt=${SPLIT_PROMPT_TAG}`)
 
 /** 同一份（脱敏后）简历 + JD + 模型 → 同一份报告。空白差异不算不同输入。 */
 function inputHashOf(resume, jd) {

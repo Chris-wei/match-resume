@@ -1,4 +1,32 @@
 // 服务端配置：端口、风控、输入上限、LLM。环境变量可覆盖。
+// 优先级：命令行/终端里的环境变量 > 项目根目录 .env 文件 > 下方默认值。
+
+const fs = require('fs')
+const path = require('path')
+
+/**
+ * 读取项目根目录的 .env（KEY=VALUE，# 注释，值可加引号）。零依赖。
+ * 已存在的环境变量不覆盖；.env 已在 .gitignore 里，key 不会进仓库。
+ */
+function loadDotEnv(file) {
+  let text
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch {
+    return // 没有 .env 就只用环境变量
+  }
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue
+    const m = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/)
+    if (!m) continue
+    let value = m[2].trim()
+    if (/^(['"]).*\1$/.test(value)) value = value.slice(1, -1)
+    else value = value.replace(/\s+#.*$/, '') // 行尾注释
+    if (process.env[m[1]] === undefined) process.env[m[1]] = value
+  }
+}
+loadDotEnv(process.env.ENV_FILE || path.join(__dirname, '..', '.env'))
 
 function intEnv(name, fallback) {
   const v = parseInt(process.env[name], 10)
@@ -7,7 +35,7 @@ function intEnv(name, fallback) {
 
 module.exports = {
   PORT: intEnv('PORT', 8787),
-  DATA_DIR: process.env.DATA_DIR || require('path').join(__dirname, '..', 'data'),
+  DATA_DIR: process.env.DATA_DIR || path.join(__dirname, '..', 'data'),
 
   // ---- 身份与会话 ----
   SESSION_TTL_DAYS: intEnv('SESSION_TTL_DAYS', 30),
@@ -75,6 +103,9 @@ module.exports = {
   // 判定（逐条核对 + 逐字引用）单独用的模型：这一步最吃能力，小模型容易改写原句导致引用被拒、条目被灰掉。
   // 不设则沿用 LLM_MODEL。同一家厂商、同一个 key（设计文档 §0：一家模型 + 一个地域）
   LLM_JUDGE_MODEL: process.env.LLM_JUDGE_MODEL || '',
+  // JSON 模式（response_format: json_object）：强制模型输出 JSON 对象。
+  // 千问/智谱均支持；若换的厂商不支持该参数（报 400），设 LLM_JSON_MODE=0 关掉
+  LLM_JSON_MODE: process.env.LLM_JSON_MODE !== '0',
   LLM_TIMEOUT_MS: 45000,
   LLM_RETRIES: 2,
   // 主报告（拆解+判定+打分）的总时限：超时即失败并退还次数。

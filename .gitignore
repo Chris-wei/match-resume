@@ -2,6 +2,9 @@
 data/
 *.tmp
 
+# 本地密钥配置（LLM_API_KEY 等），只提交 .env.example
+.env
+
 node_modules/
 server/node_modules/
 
