@@ -32,6 +32,7 @@ const evalLib = require(path.join(ROOT, 'scripts', 'eval-lib'))
 const versions = require(S('versions'))
 const retention = require(S('retention'))
 const fb = require(S('feedback'))
+const aq = require(S('adminQuery'))
 
 let passed = 0
 let failed = 0
@@ -477,6 +478,50 @@ test('判错限流：当日 100 次后拒绝', () => {
   const many = Array.from({ length: 100 }, () => u('flag', 'A', 'ip', NOW - 1000))
   assert.equal(limits.checkFlag(fakeDb(many), 'A', NOW, { FLAG_PER_IDENTITY_PER_DAY: 100 }).code, 'RATE_LIMITED')
   assert.ok(limits.checkFlag(fakeDb(many.slice(1)), 'A', NOW, { FLAG_PER_IDENTITY_PER_DAY: 100 }).ok)
+})
+
+console.log('\n== 单测：后台查询 ==')
+test('后台列表：一行一份报告、按更新时间倒序、状态与版本', () => {
+  const d = mkData()
+  retention.migrate(d)
+  d.reports[2].meta = { judgeModel: 'qwen-plus', prompts: { 'jd-split.txt': 'aaaaaaaa', 'judge.txt': 'bbbbbbbb' } }
+  const res = aq.list(d, { q1: 'all', page: 1 }, NOW)
+  assert.equal(res.total, 3)
+  const byId = Object.fromEntries(res.rows.map((r) => [r.reportId, r]))
+  assert.equal(byId.rGone.status, 'missing')
+  assert.equal(byId.rGone.score, null)
+  assert.equal(byId.rB.status, 'expired')
+  assert.equal(byId.rC.version, 'qwen-plus|jd-split@aaaaaaaa|judge@bbbbbbbb')
+  assert.equal(byId.rB.version, '未记录')
+  // 按更新时间倒序：rB(-30d) → rGone(-100d) → rC(-200d)
+  assert.deepEqual(res.rows.map((r) => r.reportId), ['rB', 'rGone', 'rC'])
+})
+test('后台列表筛选：q1 / 有判错 / 有留言 / 版本', () => {
+  const d = mkData()
+  retention.migrate(d)
+  d.feedback[0].wrongItems = [{ reqId: 'R1', at: NOW }]
+  assert.deepEqual(aq.list(d, { q1: 'inaccurate' }, NOW).rows.map((r) => r.reportId), ['rC'])
+  assert.deepEqual(aq.list(d, { hasWrong: true }, NOW).rows.map((r) => r.reportId), ['rB'])
+  assert.deepEqual(aq.list(d, { hasComment: true }, NOW).rows.map((r) => r.reportId), ['rC'])
+  assert.equal(aq.list(d, { version: '未记录' }, NOW).total, 3)
+})
+test('后台详情：不含 owner / inputHash；已删除报告标 deleted；孤儿反馈 missing', () => {
+  const d = mkData()
+  retention.migrate(d)
+  retention.deleteReport(d, 'rC', 'u1', NOW)
+  const det = aq.detail(d, 'rC', NOW)
+  assert.equal(det.status, 'deleted')
+  assert.equal(det.report.owner, undefined)
+  assert.equal(det.report.spans, undefined)
+  assert.equal(aq.detail(d, 'rGone', NOW).status, 'missing')
+  assert.equal(aq.detail(d, 'nope', NOW), null)
+})
+test('后台汇总', () => {
+  const d = mkData()
+  retention.migrate(d)
+  const s = aq.summary(d, NOW)
+  assert.equal(s.total, 3)
+  assert.deepEqual(s.q1, { accurate: 1, partial: 1, inaccurate: 1, none: 0 })
 })
 
 console.log('\n== 单测：检索 ==')
