@@ -11,7 +11,8 @@
                                  ├─ 改写建议：主报告出来后后台生成，报告页自动刷新
                                  ├─ 风控：身份日限 / 10分钟窗 / IP限制 / 全站日限 / 复制限3条
                                  ├─ 内容安全：本地敏感词库 → 微信 msgSecCheck（命中即拦，不扣次数）
-                                 └─ 存储：data/db.json（脱敏报告 30 天 + 限流计数 90 天；简历按行脱敏后存储，见下方隐私说明）
+                                 ├─ 存储：data/db.json（脱敏报告 30 天，有反馈的长期保留 + 限流计数 90 天；简历按行脱敏后存储，见下方隐私说明）
+                                 └─ 网页后台：/admin（配 ADMIN_PASSWORD 才开启）看用户反馈与报告诊断详情
 ```
 
 三条灵魂（区别于"ChatGPT 套壳"的壁垒，参考 [resume-matcher](https://provecv.com) 思路，设计文档见 [docs/design.md](docs/design.md)）：
@@ -69,7 +70,7 @@ node server/index.js
 ### 3. 跑内核测试（不需要任何账号）
 
 ```bash
-npm test    # 97 项断言：脱敏 / 引用定位 / 幻觉降级 / 打分确定性 / 一句话结论 / 风控 / 内容安全 / 身份与 IP / LLM 重试与时限 / 判定部分失败 / JD 缓存 / mock 全链路
+npm test    # 内核 112 项 + HTTP 端到端 15 项：脱敏 / 引用定位 / 幻觉降级 / 打分确定性 / 一句话结论 / 风控 / 内容安全 / 身份与 IP / LLM 重试与时限 / 判定部分失败 / JD 缓存 / mock 全链路
 ```
 
 ### 4. 微信开发者工具
@@ -109,7 +110,8 @@ export TRUST_PROXY=1
 | 引用可点击看上下文 | ✅ 点击弹出该片段前后 2 行（脱敏 spans 存在报告里） | 报告页弹层 |
 | 改写建议（缺失/部分命中各 1 句） | ✅ 分析时同步生成 | `server/rewrite.js` |
 | 复制按钮限每人每天 3 条 | ✅ 一键复制按钮由服务端计数（`/api/report/:id/copy`，同一条重复复制不重复计）。注意：改写内容本身全文下发，限的只是"一键复制"；将来要分层需在 `reportView` 裁剪 | `server/limits.js` |
-| 反馈入口「这份报告准吗」 | ✅ 3 题表单（准确性/最有用模块/**付费意愿**——保留需求验证） | 报告页底部 |
+| 反馈入口「这份报告准吗」 | ✅ 表单（准不准 / 最有用模块 / 留言） | 报告页底部 |
+| 逐条「判错了？」 | ✅ 每条判定可标记判错（首次标记弹窗告知会保留报告） | 报告页逐条判定 |
 
 免费与限次：分析每人每天 3 次（10 分钟内最多 3 次）、复制每人每天 3 条、IP 日限 10 次、全站日限 200 次，全部在 `server/config.js` 可调。分析失败不扣次数。
 
@@ -122,12 +124,36 @@ export TRUST_PROXY=1
 - 连刷用户先看到「操作太频繁」，额度真正耗尽才看到「明天再来」
 - 身份 = openid（配了 AppSecret）或设备 ID（兜底），IP 一律加盐哈希存储（`server/auth.js`）
 - 输入上限：简历 4000 字 / JD 2000 字，超长截断；PDF ≤ 5MB
-- 隐私：邮箱/手机/身份证在**手机端 + 服务端双重脱敏**，姓名在服务端切分后脱敏（header 首行名字、「姓名：」字段）；发给模型和存进报告的都是脱敏后的简历行（供引用上下文用，**内容本身是完整简历正文**，只是去掉了联系方式和姓名）；报告 30 天自动清理（启动时 + 每日定时）
+- 隐私：邮箱/手机/身份证在**手机端 + 服务端双重脱敏**，姓名在服务端切分后脱敏（header 首行名字、「姓名：」字段）；发给模型和存进报告的都是脱敏后的简历行（供引用上下文用，**内容本身是完整简历正文**，只是去掉了联系方式和姓名）；报告 30 天自动清理（启动时 + 每日定时），有反馈的报告例外，见「数据留存」
 - 流程：主报告（拆解 + 判定 + 打分）时限 75s（`ANALYZE_DEADLINE_MS`），超时即失败并退还次数；改写建议在报告返回后后台生成（时限 `REWRITE_DEADLINE_MS` 60s），失败时重新提交同一输入可补生成
 - 复用：同一身份提交相同简历 + JD（忽略空白差异）直接返回已有报告；同一份 JD 的拆解结果缓存 7 天（`JD_CACHE_TTL_DAYS`），换简历分析同一职位少一轮模型调用
 - 容错：判定按批次独立，少量批次失败只把对应条目标「待核对」，失败超过约 1/3 才整份失败；同一身份同时只跑一个分析任务；服务重启时退还未完成任务的预占次数
 - 存储：内存为准，200ms 内的写入合并为一次落盘，退出时同步刷盘
 - PDF：在独立 worker 线程解析（15s 超时 + 内存上限，禁用 pdfjs eval），每人 10 分钟 5 次 / 每天 20 次
+
+## 网页后台（`server/admin.js` + `server/admin.html`）
+
+```bash
+ADMIN_PASSWORD=换成一个长密码 npm start     # 或写进 .env
+# 浏览器打开 http://127.0.0.1:8787/admin
+```
+
+- **不设 `ADMIN_PASSWORD` 后台完全关闭**（`/admin*` 一律 404）；部署到服务器时务必走 HTTPS，并设 `TRUST_PROXY=1`（cookie 会加 Secure）
+- 登录后会话 12 小时（HttpOnly + SameSite=Strict cookie）；同一 IP 10 分钟内输错 5 次锁定 10 分钟
+- **反馈列表**：汇总（总数 / 近 7 天 / 准·部分准·不准占比 / 被标记判错条数），按准不准、有无判错标记、有无留言、版本筛选，每页 50 条
+- **报告详情**：用户反馈置顶 → 总分与雷达 → 逐条判定（要求 / JD 引用 / 判定 / 理由 / 简历引用 / flags，用户标记判错的条目标红）→ 诊断信息（模型、提示词版本、耗时、拆解被拒数等）→ 脱敏简历行（点引用可定位）→ 改写建议
+- **版本**：每份报告记录生成时的模型与提示词哈希，与 `npm run eval` 结果文件里的版本号同一算法（`server/versions.js`），可以对照"改提示词后用户反馈有没有变好"
+
+## 数据留存（`server/retention.js`）
+
+| 情况 | 处理 |
+|---|---|
+| 没有反馈的报告 | 30 天过期删除；用户删除即彻底删除 |
+| 有反馈（整份反馈或逐条判错）的报告，过期 | 长期保留，但断开与用户的关联（清空 owner / inputHash），用户侧看不到 |
+| 有反馈的报告，用户主动删除 | 脱敏留存：删简历行、简历引用、改写建议、与用户的关联；保留 JD 要求、判定与理由、分数、反馈 |
+| 反馈记录 | 跟随报告长期保留；留言入库前去掉联系方式 |
+
+隐私政策已同步说明。启动时会先跑一次幂等迁移（给已有反馈的老报告补保留标记），再执行过期清理。
 
 ## 内容安全（`server/moderation.js`）
 
@@ -180,11 +206,15 @@ npm run eval:compare -- eval/runs/<基线>.json eval/runs/<新>.json
 │   ├── mock.js                # 无 API_KEY 时启发式替身
 │   ├── prompts/               # 三个 prompt 集中管理（调手感只改这里）
 │   ├── limits.js / auth.js / db.js  # 风控 / 身份 / JSON 存储
+│   ├── retention.js / feedback.js   # 数据留存规则 / 反馈与逐条判错（纯函数）
+│   ├── admin.js / admin.html / adminQuery.js  # 网页后台：路由与登录 / 页面 / 查询
+│   ├── versions.js            # 提示词版本哈希（报告与评测共用）
 │   ├── moderation.js          # 内容安全：本地词库 + 微信 msgSecCheck
 │   ├── sensitive-words.txt / sensitive-allow.txt  # 敏感词库 / 白名单
 │   └── config.js              # 所有参数集中一处
 ├── examples/                  # 测试简历 + JD
-├── scripts/test-local.js      # 97 项内核测试
+├── scripts/test-local.js      # 112 项内核测试
+├── scripts/test-e2e.js        # 15 项 HTTP 端到端（起真实服务）
 ├── scripts/eval*.js           # 评测：跑样本 / 对比两次结果
 ├── eval/cases/                # 20 份模拟评测样本（含标准答案）
 └── docs/design.md             # 设计文档（含云开发版的历史方案，可对照）
@@ -201,7 +231,8 @@ npm run eval:compare -- eval/runs/<基线>.json eval/runs/<新>.json
 | GET | `/api/report/:id` | 报告全文 |
 | DELETE | `/api/report/:id` | 删除 |
 | POST | `/api/report/:id/copy` | `{index}` 计一次复制（每日限 3） |
-| POST | `/api/feedback` | `{reportId, q1, q2, q3}` 3 题反馈 |
+| POST | `/api/feedback` | `{reportId, q1, q2, comment}` 整份反馈（合并保存，不覆盖判错） |
+| POST | `/api/report/:id/flag` | `{reqId, wrong}` 标记 / 取消某条判错，返回 `wrongItems`（每人每天 100 次） |
 | POST | `/api/extract-pdf` | `{dataBase64}` → `{text}` |
 | GET | `/api/health` | 健康检查（返回是否 mock 模式） |
 
@@ -210,4 +241,4 @@ npm run eval:compare -- eval/runs/<基线>.json eval/runs/<新>.json
 - **localhost 只能在开发者工具里跑**：真机预览需要服务部署到带 HTTPS 域名的服务器（小程序强制要求），到那一步再考虑服务器部署 / 备案
 - 法律文案仍是草案（legal 页有水印），**开始收钱前找律师过一遍**
 - 内容安全：本地词库是种子版，上线前按业务补充；微信 msgSecCheck 需配 `WX_APPID`/`WX_APPSECRET` 才生效
-- 反馈里的「付费意愿」数据存在 `data/db.json` 的 feedback 集合——这就是设计文档 D.1 要的付费验证数据
+- 用户反馈在网页后台 `/admin` 查看；`data/db.json` 会随长期保留的报告持续变大，量大后再考虑换数据库
