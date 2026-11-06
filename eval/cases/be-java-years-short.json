@@ -1,0 +1,90 @@
+{
+  "id": "be-java-years-short",
+  "title": "Java 后端 · 年限不足",
+  "notes": "5 年要求只有 3 年（不应判 miss 触发封顶，应 partial 或 hit+年限打折）；点名的 Spring Cloud、K8s 缺失",
+  "scoreRange": [
+    45,
+    75
+  ],
+  "resume": [
+    "王磊",
+    "个人简介",
+    "3 年 Java 开发经验。",
+    "工作经历",
+    "2022.07 - 至今 小象优选 | Java 开发工程师",
+    "负责订单系统开发，使用 Spring Boot 与 MySQL，支撑日均 5 万订单。",
+    "参与 618 大促值守，处理线上告警与扩容。",
+    "使用 Redis 实现库存预扣减。",
+    "教育经历",
+    "2018.09 - 2022.06 南京信息工程大学 计算机科学与技术 本科",
+    "专业技能",
+    "Java / Spring Boot / MySQL / Redis / Git / Linux"
+  ],
+  "jd": [
+    "Java 开发工程师（电商）",
+    "岗位职责：",
+    "负责订单与库存系统的开发与维护；",
+    "参与大促期间的系统稳定性保障；",
+    "任职要求：",
+    "5年以上 Java 开发经验；",
+    "熟悉 Spring Boot 与 Spring Cloud 微服务开发；",
+    "熟悉 MySQL 与 Redis；",
+    "有 Kubernetes 容器化部署经验；",
+    "本科及以上学历；",
+    "有大型电商系统经验者优先。"
+  ],
+  "expect": [
+    {
+      "anchor": "负责订单与库存系统的开发与维护",
+      "verdict": "hit",
+      "accept": [
+        "hit",
+        "partial"
+      ],
+      "why": "订单系统开发 + Redis 库存预扣减"
+    },
+    {
+      "anchor": "参与大促期间的系统稳定性保障",
+      "verdict": "hit",
+      "why": "618 大促值守、告警与扩容"
+    },
+    {
+      "anchor": "5年以上 Java 开发经验",
+      "verdict": "partial",
+      "accept": [
+        "partial",
+        "hit"
+      ],
+      "why": "有 3 年 Java 经验：partial，或 hit 并给出 years_hint=3 由打分按比例折算；判 miss 会误触发硬门槛封顶"
+    },
+    {
+      "anchor": "熟悉 Spring Boot 与 Spring Cloud 微服务开发",
+      "verdict": "partial",
+      "why": "只有 Spring Boot，没有 Spring Cloud"
+    },
+    {
+      "anchor": "熟悉 MySQL 与 Redis",
+      "verdict": "hit",
+      "why": "两项都有使用经历"
+    },
+    {
+      "anchor": "有 Kubernetes 容器化部署经验",
+      "verdict": "miss",
+      "why": "完全没提 Kubernetes"
+    },
+    {
+      "anchor": "本科及以上学历",
+      "verdict": "hit",
+      "why": "计算机本科"
+    },
+    {
+      "anchor": "有大型电商系统经验者优先",
+      "verdict": "partial",
+      "accept": [
+        "partial",
+        "hit"
+      ],
+      "why": "电商订单系统但日均 5 万单，规模算不上大型"
+    }
+  ]
+}

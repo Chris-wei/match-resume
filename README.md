@@ -69,7 +69,7 @@ node server/index.js
 ### 3. 跑内核测试（不需要任何账号）
 
 ```bash
-npm test    # 91 项断言：脱敏 / 引用定位 / 幻觉降级 / 打分确定性 / 一句话结论 / 风控 / 内容安全 / 身份与 IP / LLM 重试与时限 / 判定部分失败 / JD 缓存 / mock 全链路
+npm test    # 96 项断言：脱敏 / 引用定位 / 幻觉降级 / 打分确定性 / 一句话结论 / 风控 / 内容安全 / 身份与 IP / LLM 重试与时限 / 判定部分失败 / JD 缓存 / mock 全链路
 ```
 
 ### 4. 微信开发者工具
@@ -143,6 +143,24 @@ export TRUST_PROXY=1
 - **隐私**：送微信的是脱敏后的文本（无联系方式、姓名），隐私政策 §3 已写明
 - **复用报告**：命中缓存时只查本地词库（词库更新同样生效）；没经过微信检查的旧报告（`wxChecked` 为假）补查一次
 
+## 评测：改提示词 / 换模型前后对比（`scripts/eval.js`）
+
+`eval/cases/` 下是 20 份**模拟**简历 + JD 样本（不含任何用户数据），覆盖后端、前端、产品、设计、数据、运营、销售、算法、测试、HR、财务，每份附逐条标准答案和预期分数区间，专门埋了易错点：同义缩写、备选项、"精通"vs 技能清单、年限不足、相邻技术（Vue≠React、Hive≠Spark）、参与 vs 负责、学历不足、完全不匹配。
+
+```bash
+npm run eval -- --label 基线                   # 用 .env 里的真实模型跑全部样本（约 2 分钟、几毛钱）
+# ……改提示词 / 换模型……
+npm run eval -- --label 改判定提示词
+npm run eval:compare -- eval/runs/<基线>.json eval/runs/<新>.json
+```
+
+- 选项：`--repeat 3`（每份跑 3 遍看稳定性）、`--only id1,id2`（只跑指定样本）、`--concurrency 1`（智谱免费版）
+- 只跑主报告（拆解 → 判定 → 打分），不生成改写建议、不用 JD 缓存、不读写 `data/`；mock 模式直接拒绝运行
+- 标准答案按 **JD 原文锚点**对应（拆解每次结果不同，不能按序号）；`accept` 列出可接受的判定，`why` 写理由方便审核
+- 指标：端到端准确率（漏拆算错）、判定准确率、拆解召回、总分落在区间比例、多轮一致性、待核对占比、引用被拒、耗时；对比输出会列出改了哪个模型/提示词、每条"从对变错 / 从错变对"及新理由
+- 结果存 `eval/runs/`（已 gitignore）；想把某次当基线提交：`git add -f eval/runs/<文件>`
+- 加样本：照 `eval/cases/` 里的格式加一个 JSON，`npm test` 会校验格式和锚点是否真在 JD 里
+
 ## 项目结构
 
 ```
@@ -166,7 +184,9 @@ export TRUST_PROXY=1
 │   ├── sensitive-words.txt / sensitive-allow.txt  # 敏感词库 / 白名单
 │   └── config.js              # 所有参数集中一处
 ├── examples/                  # 测试简历 + JD
-├── scripts/test-local.js      # 91 项内核测试
+├── scripts/test-local.js      # 96 项内核测试
+├── scripts/eval*.js           # 评测：跑样本 / 对比两次结果
+├── eval/cases/                # 20 份模拟评测样本（含标准答案）
 └── docs/design.md             # 设计文档（含云开发版的历史方案，可对照）
 ```
 

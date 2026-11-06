@@ -1,0 +1,74 @@
+{
+  "id": "be-synonyms",
+  "title": "Python 后端 · 缩写同义词",
+  "notes": "简历用 PG / ES / k8s 缩写；写过 TypeScript 应算会 JavaScript",
+  "scoreRange": [
+    85,
+    100
+  ],
+  "resume": [
+    "赵一",
+    "个人简介",
+    "3 年 Python 后端开发经验。",
+    "工作经历",
+    "2021.07 - 至今 数衡科技 | 后端工程师",
+    "用 FastAPI 开发数据查询 API，日调用 500 万次。",
+    "数据存储使用 PG，设计分区表与索引优化。",
+    "基于 ES 构建商品检索，召回率提升 15%。",
+    "服务通过 k8s 部署，编写 Helm Chart。",
+    "业余用 TypeScript 写内部管理后台。",
+    "教育经历",
+    "2017.09 - 2021.06 武汉大学 信息管理与信息系统 本科",
+    "专业技能",
+    "Python / FastAPI / PG / ES / k8s / TypeScript"
+  ],
+  "jd": [
+    "Python 后端工程师",
+    "岗位职责：",
+    "负责数据服务 API 的设计与开发；",
+    "任职要求：",
+    "熟悉 Python 与 Django 或 FastAPI 框架；",
+    "熟悉 PostgreSQL 数据库；",
+    "熟悉 Elasticsearch 搜索引擎；",
+    "有 Kubernetes 部署经验；",
+    "熟悉 JavaScript 者优先；",
+    "本科及以上学历。"
+  ],
+  "expect": [
+    {
+      "anchor": "负责数据服务 API 的设计与开发",
+      "verdict": "hit",
+      "why": "FastAPI 数据查询 API"
+    },
+    {
+      "anchor": "熟悉 Python 与 Django 或 FastAPI 框架",
+      "verdict": "hit",
+      "why": "Python + FastAPI，Django/FastAPI 是备选"
+    },
+    {
+      "anchor": "熟悉 PostgreSQL 数据库",
+      "verdict": "hit",
+      "why": "PG 是 PostgreSQL 的通用缩写"
+    },
+    {
+      "anchor": "熟悉 Elasticsearch 搜索引擎",
+      "verdict": "hit",
+      "why": "ES 构建商品检索"
+    },
+    {
+      "anchor": "有 Kubernetes 部署经验",
+      "verdict": "hit",
+      "why": "k8s 部署 + Helm Chart"
+    },
+    {
+      "anchor": "熟悉 JavaScript 者优先",
+      "verdict": "hit",
+      "why": "写过 TypeScript，按规则算会 JavaScript"
+    },
+    {
+      "anchor": "本科及以上学历",
+      "verdict": "hit",
+      "why": "本科"
+    }
+  ]
+}

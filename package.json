@@ -5,7 +5,9 @@
   "description": "AI 简历分析：本地 Node 服务 + 微信小程序（粘贴简历+JD，每条判断可溯源）",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node scripts/test-local.js"
+    "test": "node scripts/test-local.js",
+    "eval": "node scripts/eval.js",
+    "eval:compare": "node scripts/eval-compare.js"
   },
   "engines": {
     "node": ">=18"

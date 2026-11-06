@@ -12,3 +12,6 @@ server/node_modules/
 project.private.config.json
 
 .DS_Store
+
+# 评测运行结果（含模型输出）。想把某次结果当基线提交：git add -f eval/runs/<文件>
+eval/runs/

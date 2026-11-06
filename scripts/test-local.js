@@ -28,6 +28,7 @@ const limits = require(S('limits'))
 const { runPipeline } = require(S('core'))
 const { proposeRewrites } = require(S('rewrite'))
 const moderation = require(S('moderation'))
+const evalLib = require(path.join(ROOT, 'scripts', 'eval-lib'))
 
 let passed = 0
 let failed = 0
@@ -305,6 +306,60 @@ test('被拦截 10 分钟内达上限 → RATE_LIMITED（身份或 IP 任一）'
   assert.ok(limits.checkBlocked(fakeDb(five.slice(1)), 'A', 'ip1', NOW, cfg).ok)
   const old = Array.from({ length: 5 }, () => u('blocked', 'A', 'ip1', NOW - 11 * 60e3))
   assert.ok(limits.checkBlocked(fakeDb(old), 'A', 'ip1', NOW, cfg).ok)
+})
+
+console.log('\n== 单测：评测工具（标准答案匹配与打分）==')
+test('全部评测样本格式有效、锚点都在 JD 原文里', () => {
+  const cs = evalLib.loadCases(path.join(ROOT, 'eval', 'cases'))
+  assert.ok(cs.length >= 20)
+})
+test('锚点不在 JD 里 → 样本加载报错', () => {
+  assert.throws(() => evalLib.normalizeCase({ id: 'x', resume: 'r', jd: '熟悉 Java', expect: [{ anchor: '熟悉 Go', verdict: 'hit' }] }), /不在 JD/)
+})
+test('锚点匹配：整句引用优先于只引了一个词的要求', () => {
+  const reqs = [
+    { id: 'R1', text: 'Java', jdQuote: 'Java' },
+    { id: 'R2', text: '5 年 Java 经验', jdQuote: '5年以上 Java 后端开发经验' }
+  ]
+  const [m] = evalLib.matchExpectations([{ anchor: '5年以上 Java 后端开发经验', keywords: null }], reqs)
+  assert.equal(m.req.id, 'R2')
+})
+test('锚点匹配：对不上任何要求 → 漏拆', () => {
+  const [m] = evalLib.matchExpectations([{ anchor: '本科及以上学历', keywords: null }], [{ id: 'R1', text: 'Go', jdQuote: '精通 Go 语言' }])
+  assert.equal(m.req, null)
+})
+test('gradeRun：判对 / 判错 / 漏拆 / 多拆 / 总分区间', () => {
+  const c = evalLib.normalizeCase({
+    id: 't', resume: 'r', jd: '熟悉 Go\n本科及以上学历\n有 K8s 经验', scoreRange: [50, 80],
+    expect: [
+      { anchor: '熟悉 Go', verdict: 'hit' },
+      { anchor: '本科及以上学历', verdict: 'hit', accept: ['hit', 'partial'] },
+      { anchor: '有 K8s 经验', verdict: 'miss' }
+    ]
+  })
+  const g = evalLib.gradeRun(c, {
+    requirements: [
+      { id: 'R1', text: 'Go', jdQuote: '熟悉 Go' },
+      { id: 'R2', text: '本科', jdQuote: '本科及以上学历' },
+      { id: 'R3', text: '加班', jdQuote: '能接受加班' }
+    ],
+    judgments: [
+      { reqId: 'R1', verdict: 'partial', flags: [] },
+      { reqId: 'R2', verdict: 'partial', flags: ['fuzzy_quote'] },
+      { reqId: 'R3', verdict: 'unclear', flags: [] }
+    ],
+    score: { overall: 60, capped: false },
+    rejectionCount: 0
+  })
+  assert.deepEqual(g.items.map((i) => [i.matched, i.correct]), [[true, false], [true, true], [false, false]])
+  assert.deepEqual(g.extra, ['加班'])
+  assert.ok(g.scoreInRange)
+  const s = evalLib.summarize([{ id: 't', runs: [g, { ok: false, error: 'x' }] }])
+  assert.equal(s.failedRuns, 1)
+  assert.equal(s.splitRecall, 66.7)
+  assert.equal(s.accuracyMatched, 50)
+  assert.equal(s.accuracyOverall, 33.3)
+  assert.equal(s.confusion.miss['未拆出'], 1)
 })
 
 console.log('\n== 单测：检索 ==')

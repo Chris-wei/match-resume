@@ -1,0 +1,69 @@
+{
+  "id": "edu-gap-master",
+  "title": "大模型算法 · 学历不足",
+  "notes": "能力强但硕士要求不满足；CET-6 能证明英语读写",
+  "scoreRange": [
+    70,
+    92
+  ],
+  "resume": [
+    "邓宇",
+    "个人简介",
+    "2 年机器学习工程经验。",
+    "工作经历",
+    "2023.07 - 至今 智言科技 | 算法工程师",
+    "基于 PyTorch 与 Hugging Face Transformers 对 7B 模型做 LoRA 微调，客服问答准确率提升 9%。",
+    "搭建自动化评测集与评测脚本，覆盖 2000 条用例。",
+    "教育经历",
+    "2019.09 - 2023.06 浙江大学 计算机科学与技术 本科",
+    "证书",
+    "CET-6（580）"
+  ],
+  "jd": [
+    "机器学习研究员",
+    "岗位职责：",
+    "负责大模型微调与评测；",
+    "任职要求：",
+    "硕士及以上学历；",
+    "熟悉 PyTorch；",
+    "有大模型微调（LoRA 等）实践经验；",
+    "熟悉 Hugging Face Transformers 者优先；",
+    "英语读写熟练。"
+  ],
+  "expect": [
+    {
+      "anchor": "负责大模型微调与评测",
+      "verdict": "hit",
+      "why": "LoRA 微调 + 评测集"
+    },
+    {
+      "anchor": "硕士及以上学历",
+      "verdict": "miss",
+      "why": "本科"
+    },
+    {
+      "anchor": "熟悉 PyTorch",
+      "verdict": "hit",
+      "why": "PyTorch 微调"
+    },
+    {
+      "anchor": "有大模型微调（LoRA 等）实践经验",
+      "verdict": "hit",
+      "why": "7B 模型 LoRA 微调"
+    },
+    {
+      "anchor": "熟悉 Hugging Face Transformers 者优先",
+      "verdict": "hit",
+      "why": "用 Transformers 微调"
+    },
+    {
+      "anchor": "英语读写熟练",
+      "verdict": "hit",
+      "accept": [
+        "hit",
+        "partial"
+      ],
+      "why": "CET-6 580；partial 也可接受"
+    }
+  ]
+}

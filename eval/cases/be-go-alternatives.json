@@ -1,0 +1,80 @@
+{
+  "id": "be-go-alternatives",
+  "title": "Go 后端 · 备选项",
+  "notes": "\"A 或 B\"\"A/B 等\"备选关系：满足任一即 hit，不能因缺 Java/Kafka 判 partial",
+  "scoreRange": [
+    85,
+    100
+  ],
+  "resume": [
+    "陈晨",
+    "个人简介",
+    "4 年后端开发经验，主力语言 Go。",
+    "工作经历",
+    "2020.07 - 至今 云帆科技 | 后端工程师",
+    "使用 Go 开发消息推送平台，日推送量 2 亿条，基于 RocketMQ 实现削峰。",
+    "搭建 Prometheus + Grafana 监控，配置核心接口告警规则。",
+    "负责推送通道的灰度与回滚机制。",
+    "个人项目",
+    "GitHub 开源一个 Go 限流组件，获得 800 star。",
+    "教育经历",
+    "2016.09 - 2020.06 西安电子科技大学 通信工程 本科",
+    "专业技能",
+    "Go / RocketMQ / Redis / MySQL / Prometheus / Grafana"
+  ],
+  "jd": [
+    "后端开发工程师（中间件方向）",
+    "岗位职责：",
+    "负责消息推送平台的设计与开发；",
+    "建设服务监控与告警体系；",
+    "任职要求：",
+    "3年以上后端开发经验；",
+    "精通 Go 或 Java 其中一门语言；",
+    "熟悉 Kafka/RocketMQ 等消息中间件；",
+    "熟悉 Prometheus 或其他监控系统；",
+    "有开源项目贡献或技术博客者优先；",
+    "本科及以上学历。"
+  ],
+  "expect": [
+    {
+      "anchor": "负责消息推送平台的设计与开发",
+      "verdict": "hit",
+      "why": "用 Go 开发消息推送平台"
+    },
+    {
+      "anchor": "建设服务监控与告警体系",
+      "verdict": "hit",
+      "why": "搭建 Prometheus + Grafana 并配置告警"
+    },
+    {
+      "anchor": "3年以上后端开发经验",
+      "verdict": "hit",
+      "why": "4 年"
+    },
+    {
+      "anchor": "精通 Go 或 Java 其中一门语言",
+      "verdict": "hit",
+      "why": "Go 为主力语言且有大规模使用经历，备选满足其一即可"
+    },
+    {
+      "anchor": "熟悉 Kafka/RocketMQ 等消息中间件",
+      "verdict": "hit",
+      "why": "用 RocketMQ 削峰，备选满足其一即可"
+    },
+    {
+      "anchor": "熟悉 Prometheus 或其他监控系统",
+      "verdict": "hit",
+      "why": "搭建过 Prometheus"
+    },
+    {
+      "anchor": "有开源项目贡献或技术博客者优先",
+      "verdict": "hit",
+      "why": "GitHub 开源组件 800 star"
+    },
+    {
+      "anchor": "本科及以上学历",
+      "verdict": "hit",
+      "why": "本科"
+    }
+  ]
+}

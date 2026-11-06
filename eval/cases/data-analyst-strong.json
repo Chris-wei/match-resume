@@ -1,0 +1,84 @@
+{
+  "id": "data-analyst-strong",
+  "title": "数据分析 · 高匹配",
+  "notes": "\"Tableau、Power BI 等\"只用过其一应算 hit",
+  "scoreRange": [
+    85,
+    100
+  ],
+  "resume": [
+    "何静",
+    "个人简介",
+    "3 年互联网数据分析经验。",
+    "工作经历",
+    "2021.07 - 至今 快送到家 | 数据分析师",
+    "搭建履约业务指标体系，覆盖 80+ 指标，配置日报与异常告警。",
+    "负责骑手流失专题分析，提出的补贴方案使 30 日流失率下降 4 个百分点。",
+    "设计并分析首页改版 A/B 实验，评估显著性并给出上线建议。",
+    "日常使用 SQL（Hive）取数，使用 Python pandas 做数据清洗。",
+    "使用 Power BI 搭建运营看板。",
+    "教育经历",
+    "2017.09 - 2021.06 中南大学 统计学 本科",
+    "专业技能",
+    "SQL / Python / pandas / Power BI / Excel"
+  ],
+  "jd": [
+    "数据分析师",
+    "岗位职责：",
+    "负责业务指标体系搭建与日常监控；",
+    "开展专题分析，输出可落地的业务建议；",
+    "设计并分析 A/B 实验；",
+    "任职要求：",
+    "2年以上数据分析经验；",
+    "熟练使用 SQL；",
+    "熟悉 Python 数据分析（pandas 等）；",
+    "熟练使用 Tableau、Power BI 等 BI 工具；",
+    "统计学、数学或计算机相关专业本科及以上。"
+  ],
+  "expect": [
+    {
+      "anchor": "负责业务指标体系搭建与日常监控",
+      "verdict": "hit",
+      "why": "80+ 指标体系 + 日报告警"
+    },
+    {
+      "anchor": "开展专题分析，输出可落地的业务建议",
+      "verdict": "hit",
+      "why": "流失专题分析，方案落地有效果"
+    },
+    {
+      "anchor": "设计并分析 A/B 实验",
+      "verdict": "hit",
+      "why": "首页改版 A/B 实验"
+    },
+    {
+      "anchor": "2年以上数据分析经验",
+      "verdict": "hit",
+      "why": "3 年"
+    },
+    {
+      "anchor": "熟练使用 SQL",
+      "verdict": "hit",
+      "why": "日常 SQL 取数"
+    },
+    {
+      "anchor": "熟悉 Python 数据分析（pandas 等）",
+      "verdict": "hit",
+      "why": "pandas 数据清洗"
+    },
+    {
+      "anchor": "熟练使用 Tableau、Power BI 等 BI 工具",
+      "verdict": "hit",
+      "accept": [
+        "hit",
+        "partial"
+      ],
+      "why": "Power BI 看板，\"等 BI 工具\"满足其一即可"
+    },
+    {
+      "anchor": "统计学、数学或计算机相关专业本科及以上",
+      "verdict": "hit",
+      "why": "统计学本科"
+    }
+  ]
+}

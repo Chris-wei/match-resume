@@ -1,0 +1,65 @@
+{
+  "id": "fe-skill-list-only",
+  "title": "前端可视化 · 只在技能清单",
+  "notes": "程度词规则：精通 + 只在清单 = partial；熟悉 + 在清单 = hit",
+  "scoreRange": [
+    65,
+    90
+  ],
+  "resume": [
+    "周婷",
+    "个人简介",
+    "2 年前端开发经验。",
+    "工作经历",
+    "2022.07 - 至今 智图数据 | 前端工程师",
+    "使用 Vue 与 ECharts 开发政务数据大屏，单屏渲染 30+ 图表。",
+    "封装通用图表组件，支持主题切换。",
+    "教育经历",
+    "2018.09 - 2022.06 河海大学 计算机科学与技术 本科",
+    "专业技能",
+    "JavaScript / TypeScript / Vue / ECharts / Webpack"
+  ],
+  "jd": [
+    "前端工程师（可视化方向）",
+    "岗位职责：",
+    "负责数据大屏与可视化图表开发；",
+    "任职要求：",
+    "精通 TypeScript；",
+    "熟悉 ECharts 或 D3 可视化库；",
+    "熟悉 Webpack；",
+    "了解 WebGL 或 Three.js 者优先；",
+    "本科及以上学历。"
+  ],
+  "expect": [
+    {
+      "anchor": "负责数据大屏与可视化图表开发",
+      "verdict": "hit",
+      "why": "政务数据大屏"
+    },
+    {
+      "anchor": "精通 TypeScript",
+      "verdict": "partial",
+      "why": "要求精通，TypeScript 只出现在技能清单"
+    },
+    {
+      "anchor": "熟悉 ECharts 或 D3 可视化库",
+      "verdict": "hit",
+      "why": "ECharts 有使用经历"
+    },
+    {
+      "anchor": "熟悉 Webpack",
+      "verdict": "hit",
+      "why": "要求熟悉，技能清单列出即 hit"
+    },
+    {
+      "anchor": "了解 WebGL 或 Three.js 者优先",
+      "verdict": "miss",
+      "why": "完全没提"
+    },
+    {
+      "anchor": "本科及以上学历",
+      "verdict": "hit",
+      "why": "本科"
+    }
+  ]
+}

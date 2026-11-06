@@ -1,0 +1,76 @@
+{
+  "id": "qa-testdev",
+  "title": "测试开发 · 参与 vs 负责",
+  "notes": "\"负责/建设\"对\"参与/定时任务\"应 partial",
+  "scoreRange": [
+    60,
+    85
+  ],
+  "resume": [
+    "蒋涛",
+    "个人简介",
+    "3 年软件测试经验。",
+    "工作经历",
+    "2021.07 - 至今 汇达金融 | 测试工程师",
+    "编写接口测试用例，使用 Python + Pytest 维护 500+ 条自动化用例。",
+    "参与自动化测试框架的维护，修复用例不稳定问题。",
+    "在 Jenkins 上配置定时任务执行回归测试。",
+    "教育经历",
+    "2017.09 - 2021.06 合肥工业大学 电子信息工程 本科",
+    "专业技能",
+    "Python / Pytest / Postman / Jenkins / MySQL"
+  ],
+  "jd": [
+    "测试开发工程师",
+    "岗位职责：",
+    "负责核心业务的自动化测试框架建设；",
+    "建设 CI/CD 流水线，将自动化测试接入发布流程；",
+    "任职要求：",
+    "3年以上测试开发经验；",
+    "熟悉 Python 与 Pytest；",
+    "熟悉 Jenkins 或 GitLab CI；",
+    "有性能测试经验（JMeter 等）者优先；",
+    "本科及以上学历。"
+  ],
+  "expect": [
+    {
+      "anchor": "负责核心业务的自动化测试框架建设",
+      "verdict": "partial",
+      "why": "只是参与框架维护，不是负责建设"
+    },
+    {
+      "anchor": "建设 CI/CD 流水线，将自动化测试接入发布流程",
+      "verdict": "partial",
+      "why": "只配了 Jenkins 定时回归，没有接入发布流程"
+    },
+    {
+      "anchor": "3年以上测试开发经验",
+      "verdict": "hit",
+      "accept": [
+        "hit",
+        "partial"
+      ],
+      "why": "3 年测试经验且写自动化用例；partial 也可接受"
+    },
+    {
+      "anchor": "熟悉 Python 与 Pytest",
+      "verdict": "hit",
+      "why": "Python + Pytest 维护用例"
+    },
+    {
+      "anchor": "熟悉 Jenkins 或 GitLab CI",
+      "verdict": "hit",
+      "why": "用过 Jenkins"
+    },
+    {
+      "anchor": "有性能测试经验（JMeter 等）者优先",
+      "verdict": "miss",
+      "why": "没提性能测试"
+    },
+    {
+      "anchor": "本科及以上学历",
+      "verdict": "hit",
+      "why": "本科"
+    }
+  ]
+}

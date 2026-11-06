@@ -1,0 +1,81 @@
+{
+  "id": "fe-react-strong",
+  "title": "前端 React · 高匹配",
+  "notes": "前端基准正例，含构建工具备选、优先项",
+  "scoreRange": [
+    85,
+    100
+  ],
+  "resume": [
+    "刘洋",
+    "个人简介",
+    "5 年前端开发经验，专注 B 端中后台。",
+    "工作经历",
+    "2021.04 - 至今 云图 SaaS | 高级前端工程师",
+    "负责 CRM 产品前端架构设计，基于 React + TypeScript 搭建组件库，沉淀 60+ 业务组件。",
+    "将构建工具从 Webpack 迁移到 Vite，本地启动时间从 90s 降至 8s。",
+    "基于 qiankun 落地微前端，拆分 5 个子应用独立发布。",
+    "首屏 LCP 从 3.2s 优化至 1.4s。",
+    "2019.07 - 2021.03 优联网络 | 前端工程师",
+    "使用 React 与 Redux 开发电商后台。",
+    "教育经历",
+    "2015.09 - 2019.06 厦门大学 软件工程 本科",
+    "专业技能",
+    "React / Redux / TypeScript / Webpack / Vite / qiankun"
+  ],
+  "jd": [
+    "高级前端工程师",
+    "岗位职责：",
+    "负责公司 SaaS 产品的前端架构设计与开发；",
+    "推动前端工程化与性能优化；",
+    "任职要求：",
+    "4年以上前端开发经验；",
+    "精通 React 及其生态；",
+    "熟练使用 TypeScript；",
+    "熟悉 Webpack 或 Vite 等构建工具；",
+    "有微前端落地经验者优先；",
+    "本科及以上学历。"
+  ],
+  "expect": [
+    {
+      "anchor": "负责公司 SaaS 产品的前端架构设计与开发",
+      "verdict": "hit",
+      "why": "CRM SaaS 前端架构设计"
+    },
+    {
+      "anchor": "推动前端工程化与性能优化",
+      "verdict": "hit",
+      "why": "构建迁移 + LCP 优化"
+    },
+    {
+      "anchor": "4年以上前端开发经验",
+      "verdict": "hit",
+      "why": "5 年"
+    },
+    {
+      "anchor": "精通 React 及其生态",
+      "verdict": "hit",
+      "why": "React + Redux 多年使用经历"
+    },
+    {
+      "anchor": "熟练使用 TypeScript",
+      "verdict": "hit",
+      "why": "React + TypeScript 搭组件库"
+    },
+    {
+      "anchor": "熟悉 Webpack 或 Vite 等构建工具",
+      "verdict": "hit",
+      "why": "两者都用过"
+    },
+    {
+      "anchor": "有微前端落地经验者优先",
+      "verdict": "hit",
+      "why": "qiankun 落地"
+    },
+    {
+      "anchor": "本科及以上学历",
+      "verdict": "hit",
+      "why": "本科"
+    }
+  ]
+}

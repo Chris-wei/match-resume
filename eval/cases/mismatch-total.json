@@ -1,0 +1,62 @@
+{
+  "id": "mismatch-total",
+  "title": "完全不匹配",
+  "notes": "插画师投 Java 后端：几乎全 miss，总分应很低",
+  "scoreRange": [
+    0,
+    20
+  ],
+  "resume": [
+    "白露",
+    "个人简介",
+    "3 年插画与视觉设计经验。",
+    "工作经历",
+    "2021.07 - 至今 青禾文创 | 插画师",
+    "负责 IP 形象与周边产品插画设计。",
+    "教育经历",
+    "2017.09 - 2021.06 四川美术学院 动画 本科",
+    "专业技能",
+    "Procreate / Photoshop / Illustrator"
+  ],
+  "jd": [
+    "Java 后端工程师",
+    "岗位职责：",
+    "负责交易系统服务端开发；",
+    "任职要求：",
+    "3年以上 Java 开发经验；",
+    "熟悉 Spring Boot；",
+    "熟悉 MySQL 与 Redis；",
+    "计算机相关专业本科及以上学历。"
+  ],
+  "expect": [
+    {
+      "anchor": "负责交易系统服务端开发",
+      "verdict": "miss",
+      "why": "没有任何开发经历"
+    },
+    {
+      "anchor": "3年以上 Java 开发经验",
+      "verdict": "miss",
+      "why": "3 年是插画经验，不能当 Java 经验"
+    },
+    {
+      "anchor": "熟悉 Spring Boot",
+      "verdict": "miss",
+      "why": "没提"
+    },
+    {
+      "anchor": "熟悉 MySQL 与 Redis",
+      "verdict": "miss",
+      "why": "没提"
+    },
+    {
+      "anchor": "计算机相关专业本科及以上学历",
+      "verdict": "partial",
+      "accept": [
+        "partial",
+        "miss"
+      ],
+      "why": "本科但专业是动画，不相关"
+    }
+  ]
+}
