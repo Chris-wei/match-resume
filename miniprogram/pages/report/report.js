@@ -16,6 +16,9 @@ function sameText(a, b) {
   return strip(a) === strip(b)
 }
 
+// 首次标记"判错"前的知情确认（每台设备一次）
+const FLAG_CONSENT_KEY = 'flag_consent'
+
 const REWRITE_POLL_MS = 2000
 const REWRITE_POLL_MAX = 40 // 约 80 秒，与服务端改写时限匹配
 
@@ -105,6 +108,7 @@ Page({
       value: x.value,
       count: x.count
     }))
+    const wrongSet = new Set(report.wrongItems || [])
     const judgments = (report.judgments || [])
       .map((j, i) => ({
         ...j,
@@ -112,6 +116,8 @@ Page({
         // 模型抄写有漂移、展示的是整行原文 → 提示用户这条是"近似引用"
         fuzzy: (j.flags || []).indexOf('fuzzy_quote') >= 0,
         verdictText: VERDICT_TEXT[j.verdict] || j.verdict,
+        // 用户是否标记过这条"判错了"
+        wrong: wrongSet.has(j.reqId),
         req: reqById[j.reqId] || { text: j.reqId, categoryText: '', weight: 1 }
       }))
       .sort((a, b) => (VERDICT_ORDER[a.verdict] - VERDICT_ORDER[b.verdict]) || a.order - b.order)
@@ -182,6 +188,43 @@ Page({
   applyFilter(list, filter) {
     return filter === 'all' ? list : list.filter((j) => j.verdict === filter)
   },
+  // ---- 逐条"判错了？"：标记即时提交，失败恢复 ----
+  setWrongState(ids) {
+    const set = new Set(ids)
+    const judgments = this.data.judgments.map((j) => ({ ...j, wrong: set.has(j.reqId) }))
+    this.setData({ judgments, visibleJudgments: this.applyFilter(judgments, this.data.filter) })
+  },
+  onFlagWrong(e) {
+    const reqId = e.currentTarget.dataset.id
+    const item = this.data.judgments.find((j) => j.reqId === reqId)
+    if (!item) return
+    const doFlag = () => {
+      const before = this.data.judgments.filter((j) => j.wrong).map((j) => j.reqId)
+      const wrong = !item.wrong
+      // 乐观更新
+      this.setWrongState(wrong ? before.concat(reqId) : before.filter((id) => id !== reqId))
+      api
+        .call('/api/report/' + this.data.reportId + '/flag', { reqId, wrong }, { loading: false })
+        .then((r) => this.setWrongState(r.wrongItems || []))
+        .catch((err) => {
+          this.setWrongState(before)
+          wx.showToast({ title: api.friendlyError(err), icon: 'none' })
+        })
+    }
+    // 取消标记不需要确认；首次标记先告知"报告会被保留"
+    if (item.wrong || wx.getStorageSync(FLAG_CONSENT_KEY)) return doFlag()
+    wx.showModal({
+      title: '标记这条判错？',
+      content: '标记后这份报告会被保留，用于改进分析质量；删除报告时会清除简历内容。',
+      confirmText: '确定标记',
+      success: (res) => {
+        if (!res.confirm) return
+        wx.setStorageSync(FLAG_CONSENT_KEY, '1')
+        doFlag()
+      }
+    })
+  },
+
   onFilter(e) {
     const key = e.currentTarget.dataset.key
     // 再点一次已选中的统计块 → 取消筛选

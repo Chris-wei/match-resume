@@ -78,6 +78,9 @@
         <view class="quote-text">{{item.req.jdQuote}}</view>
       </view>
       <view class="unclear-tip" wx:if="{{item.verdict === 'unclear'}}">证据不充分，建议对照简历自行核对</view>
+      <view class="flag-row">
+        <text class="flag-btn {{item.wrong ? 'flag-on' : ''}}" data-id="{{item.reqId}}" bindtap="onFlagWrong">{{item.wrong ? '✓ 已标记判错' : '判错了？'}}</text>
+      </view>
     </view>
     </view>
   </view>
@@ -176,6 +179,7 @@
         <textarea class="fb-textarea" value="{{feedback.comment}}" bindinput="onFbComment"
           maxlength="300" always-embed="{{true}}" placeholder-class="ph"
           placeholder="哪条判错了、还想要什么功能，都可以写在这里"></textarea>
+        <view class="fb-note">提交后这份报告将被保留，用于改进分析质量（删除时会清除简历内容）</view>
         <button class="btn-primary fb-submit" bindtap="submitFeedback">提交反馈</button>
       </block>
     </view>

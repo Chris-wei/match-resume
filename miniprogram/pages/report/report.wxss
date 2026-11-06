@@ -283,6 +283,31 @@
   margin-top: 10rpx;
 }
 
+/* ---------- 逐条"判错了？"（次要操作，不抢判定内容的焦点）---------- */
+.flag-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8rpx;
+  padding-right: 26rpx;
+}
+
+.flag-btn {
+  font-size: 22rpx;
+  color: var(--text-3, #9aa0ae);
+  padding: 6rpx 0 6rpx 16rpx;
+}
+
+.flag-on {
+  color: var(--slate, #64748b);
+}
+
+.fb-note {
+  font-size: 22rpx;
+  color: var(--text-3, #9aa0ae);
+  margin: 20rpx 0 4rpx;
+  line-height: 1.6;
+}
+
 /* ---------- 改写建议 ---------- */
 .rw {
   padding: 26rpx 0;
