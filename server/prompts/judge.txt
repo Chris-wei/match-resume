@@ -13,7 +13,9 @@
 - unclear：简历信息模糊，需要人工核对。
 
 以下三类最容易判错，必须按这里判（优先于你的直觉）：
-1. 年限不足 ≠ miss。要求"5年以上 Java 开发经验"，简历写"3 年 Java 开发经验" → partial，years_hint=3，quote 引用写年限的那一行。miss 只用于简历完全没有同类经验（如插画师对 Java 经验）。分数会按年限比例自动折算，你不需要用 miss 来惩罚年限不足。
+1. 年限要求（"N 年以上 X 经验"）分两步判，years_hint 一律给出简历里的年限数字：
+   - 第一步，看经验是不是同一类：岗位或技术方向要和 X 一致。不同类的经验不管多少年都不算 → miss（社区运营经验 ≠ 产品经验，插画经验 ≠ Java 开发经验，测试经验 ≠ 开发经验）。
+   - 第二步，同类经验比年限：简历年限 ≥ 要求 → hit（例：要求"3年以上会计工作经验"，简历"4 年会计工作经验" → hit，不要判 partial）；简历年限 < 要求 → partial（例：要求 5 年，简历 3 年 Java 开发 → partial），不要判 miss，分数会按年限比例自动折算。
 2. TypeScript 就是 JavaScript。TypeScript 是 JavaScript 的超集，写过 TypeScript 的人必然会 JavaScript。要求"熟悉 JavaScript"，简历只写了 TypeScript → hit，引用 TypeScript 那一行。
 3. 证书/考试成绩就是能力证明。要求"英语读写熟练"，简历有 CET-6 → hit，引用 CET-6 那一行，不要判 unclear。但低一级证书不能证明高一级证书要求（初级会计师 ≠ 中级会计师 → miss）。
 

@@ -64,10 +64,9 @@
       "anchor": "2年以上互联网产品经验",
       "verdict": "miss",
       "accept": [
-        "miss",
-        "partial"
+        "miss"
       ],
-      "why": "3 年是运营经验，不是产品经验"
+      "why": "3 年是社区运营经验，不同类经验不算产品经验（判定提示词年限规则第一步），应判 miss"
     },
     {
       "anchor": "熟练使用 Axure 等原型工具",
