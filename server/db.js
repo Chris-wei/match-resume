@@ -10,6 +10,7 @@ const path = require('path')
 const crypto = require('crypto')
 const config = require('./config')
 const retention = require('./retention')
+const feedback = require('./feedback')
 
 const FILE = path.join(config.DATA_DIR, 'db.json')
 const SAVE_DEBOUNCE_MS = 200
@@ -171,10 +172,21 @@ function releasePendingUsage() {
 
 // ---------------- feedback ----------------
 
-function upsertFeedback(doc) {
-  data.feedback = data.feedback.filter((f) => !(f.owner === doc.owner && f.reportId === doc.reportId))
-  data.feedback.push(doc)
+// 反馈逻辑见 feedback.js（整份反馈合并保存，不覆盖逐条判错）
+function saveFeedbackForm(owner, reportId, form, now = Date.now()) {
+  const doc = feedback.saveForm(data, owner, reportId, form, now)
   save()
+  return doc
+}
+
+function setWrongItem(owner, reportId, reqId, wrong, now = Date.now()) {
+  const ids = feedback.setWrong(data, owner, reportId, reqId, wrong, now)
+  save()
+  return ids
+}
+
+function wrongItemsOf(owner, reportId) {
+  return feedback.wrongIds(data, owner, reportId)
 }
 
 // ---------------- JD 拆解缓存 ----------------
@@ -232,7 +244,9 @@ module.exports = {
   confirmUsage,
   removeUsage,
   releasePendingUsage,
-  upsertFeedback,
+  saveFeedbackForm,
+  setWrongItem,
+  wrongItemsOf,
   getJdCache,
   setJdCache,
   prune,

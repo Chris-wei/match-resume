@@ -76,9 +76,11 @@ function auth(req) {
   return { owner: sub, ipHash: ipHashOf(req) }
 }
 
-function reportView(doc) {
+function reportView(doc, owner) {
   // 免费版：全部内容直接下发（裁剪点收口在服务端，将来分层只改这里）
-  const { owner, inputHash, wxChecked, meta, retained, ...view } = doc
+  const { owner: _owner, inputHash, wxChecked, meta, retained, ...view } = doc
+  // 当前用户对这份报告标记过"判错"的条目
+  view.wrongItems = db.wrongItemsOf(owner, doc.reportId)
   return view
 }
 
@@ -283,7 +285,7 @@ const routes = {
         existing.rewritesStatus = 'pending'
         generateRewrites(existing)
       }
-      return send(res, 200, { ok: true, status: 'done', cached: true, reportId: existing.reportId, report: reportView(existing) })
+      return send(res, 200, { ok: true, status: 'done', cached: true, reportId: existing.reportId, report: reportView(existing, ctx.owner) })
     }
 
     // ② 同一身份已有任务在跑：同一输入就接着轮询它（连点/重进页面），不同输入请稍候
@@ -331,7 +333,7 @@ const routes = {
     // 完成时把报告一起带回，报告页不用再请求一次
     if (job.status === 'done') {
       const doc = db.getReport(job.reportId)
-      if (doc && doc.owner === ctx.owner) out.report = reportView(doc)
+      if (doc && doc.owner === ctx.owner) out.report = reportView(doc, ctx.owner)
     }
     send(res, 200, out)
   },
@@ -350,7 +352,7 @@ const routes = {
     const doc = db.getReport(ctx.params.id)
     if (!doc || doc.owner !== ctx.owner) return send(res, 200, fail('NOT_FOUND', '报告不存在或已被删除'))
     if (doc.expiresAt < Date.now()) return send(res, 200, fail('EXPIRED', '报告已过期（保留 30 天）'))
-    send(res, 200, { ok: true, report: reportView(doc) })
+    send(res, 200, { ok: true, report: reportView(doc, ctx.owner) })
   },
 
   'DELETE /api/report/:id': async (req, res, ctx) => {
@@ -378,6 +380,21 @@ const routes = {
     send(res, 200, { ok: true, remaining: check.remaining, limit: check.limit })
   },
 
+  'POST /api/report/:id/flag': async (req, res, ctx) => {
+    const doc = db.getReport(ctx.params.id)
+    if (!doc || doc.owner !== ctx.owner) return send(res, 200, fail('NOT_FOUND', '报告不存在或已被删除'))
+    if (doc.expiresAt < Date.now()) return send(res, 200, fail('EXPIRED', '报告已过期（保留 30 天）'))
+    const reqId = String(ctx.body.reqId || '')
+    if (!(doc.requirements || []).some((r) => r.id === reqId)) return send(res, 200, fail('BAD_REQ', '要求不存在'))
+    if (typeof ctx.body.wrong !== 'boolean') return send(res, 200, fail('INVALID_INPUT', '输入内容不符合要求'))
+    const lim = limits.checkFlag(db, ctx.owner)
+    if (!lim.ok) return send(res, 200, lim)
+    const wrongItems = db.setWrongItem(ctx.owner, doc.reportId, reqId, ctx.body.wrong)
+    // 限流计数不带报告引用，避免 usage 里留下报告与用户的关联
+    db.recordUsage('flag', ctx.owner, ctx.ipHash, Date.now())
+    send(res, 200, { ok: true, wrongItems })
+  },
+
   'POST /api/feedback': async (req, res, ctx) => {
     const b = ctx.body
     const reportId = String(b.reportId || '')
@@ -394,7 +411,8 @@ const routes = {
       const mod = await moderation.checkTexts([{ field: 'comment', text: redact(comment), scene: 'comment' }], { owner: ctx.owner })
       if (!mod.ok) return moderationFail(res, ctx, mod)
     }
-    db.upsertFeedback({ owner: ctx.owner, reportId, q1, q2, comment, createdAt: Date.now() })
+    // 合并保存（不覆盖逐条判错）；留言入库前去掉联系方式
+    db.saveFeedbackForm(ctx.owner, reportId, { q1, q2, comment: redact(comment) })
     send(res, 200, { ok: true })
   },
 
@@ -424,6 +442,7 @@ const BODY_CAP_LARGE = 7 * 1024 * 1024 // extract-pdf：5MB 文件的 base64 约
 const DYNAMIC = [
   [/^\/api\/report\/([\w-]+)$/, '/api/report/:id'],
   [/^\/api\/report\/([\w-]+)\/copy$/, '/api/report/:id/copy'],
+  [/^\/api\/report\/([\w-]+)\/flag$/, '/api/report/:id/flag'],
   [/^\/api\/job\/([\w-]+)$/, '/api/job/:id']
 ]
 

@@ -89,6 +89,14 @@ function checkBlocked(db, owner, ipHash, now = Date.now(), cfg = config) {
   return { ok: true }
 }
 
+/** 逐条判错限次：每人每天 FLAG_PER_IDENTITY_PER_DAY 次（防刷）。计数记录不带报告引用。 */
+function checkFlag(db, owner, now = Date.now(), cfg = config) {
+  if (count(db, { kind: 'flag', owner }, dayStart(now)) >= cfg.FLAG_PER_IDENTITY_PER_DAY) {
+    return { ok: false, code: 'RATE_LIMITED', message: '操作太频繁，明天再来' }
+  }
+  return { ok: true }
+}
+
 /** 本地时区的 YYYY-MM-DD（与日限的自然日口径一致；toISOString 是 UTC，凌晨会差一天）。 */
 function localDateKey(now) {
   const d = new Date(now)
@@ -115,4 +123,4 @@ function quotaInfo(db, owner, ipHash, now = Date.now(), cfg = config) {
   }
 }
 
-module.exports = { checkAnalyze, checkCopy, checkPdf, checkBlocked, quotaInfo, dayStart, localDateKey, DAY_MS }
+module.exports = { checkAnalyze, checkCopy, checkPdf, checkBlocked, checkFlag, quotaInfo, dayStart, localDateKey, DAY_MS }

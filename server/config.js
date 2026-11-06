@@ -64,6 +64,8 @@ module.exports = {
   PDF_TIMEOUT_MS: 15000,
   // 内容安全：被拦截的提交单独计数，10 分钟内超过次数提示"操作太频繁"（身份、IP 各自计），防反复试探绕过
   MODERATION_BLOCKS_PER_10MIN: intEnv('MODERATION_BLOCKS_PER_10MIN', 5),
+  // 逐条"判错了"标记：每人每天操作上限
+  FLAG_PER_IDENTITY_PER_DAY: intEnv('FLAG_PER_IDENTITY_PER_DAY', 100),
 
   // ---- 内容安全（本地词库 → 微信 msgSecCheck；微信部分复用上面的 WX_APPID/WX_APPSECRET）----
   SENSITIVE_WORDS_FILE: process.env.SENSITIVE_WORDS_FILE || path.join(__dirname, 'sensitive-words.txt'),

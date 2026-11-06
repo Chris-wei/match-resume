@@ -31,6 +31,7 @@ const moderation = require(S('moderation'))
 const evalLib = require(path.join(ROOT, 'scripts', 'eval-lib'))
 const versions = require(S('versions'))
 const retention = require(S('retention'))
+const fb = require(S('feedback'))
 
 let passed = 0
 let failed = 0
@@ -451,6 +452,31 @@ test('用户删除：不是自己的报告 → false，不改动', () => {
   const d = mkData()
   assert.equal(retention.deleteReport(d, 'rC', 'u2', NOW), false)
   assert.equal(d.reports[2].owner, 'u1')
+})
+
+console.log('\n== 单测：反馈与判错 ==')
+const mkFb = () => ({ reports: [{ reportId: 'r1', owner: 'u1', retained: false, requirements: [{ id: 'R1' }, { id: 'R2' }] }], feedback: [], usage: [] })
+test('判错：标记/取消/幂等，并置 retained', () => {
+  const d = mkFb()
+  assert.deepEqual(fb.setWrong(d, 'u1', 'r1', 'R1', true, NOW), ['R1'])
+  assert.deepEqual(fb.setWrong(d, 'u1', 'r1', 'R1', true, NOW), ['R1'])
+  assert.deepEqual(fb.setWrong(d, 'u1', 'r1', 'R2', true, NOW), ['R1', 'R2'])
+  assert.deepEqual(fb.setWrong(d, 'u1', 'r1', 'R1', false, NOW), ['R2'])
+  assert.equal(d.reports[0].retained, true)
+  assert.equal(d.feedback.length, 1)
+})
+test('整份反馈合并保存：不覆盖已有判错', () => {
+  const d = mkFb()
+  fb.setWrong(d, 'u1', 'r1', 'R1', true, NOW)
+  fb.saveForm(d, 'u1', 'r1', { q1: 'inaccurate', q2: 'none', comment: '不准' }, NOW + 1)
+  assert.deepEqual(fb.wrongIds(d, 'u1', 'r1'), ['R1'])
+  assert.equal(d.feedback[0].q1, 'inaccurate')
+  assert.equal(d.feedback[0].updatedAt, NOW + 1)
+})
+test('判错限流：当日 100 次后拒绝', () => {
+  const many = Array.from({ length: 100 }, () => u('flag', 'A', 'ip', NOW - 1000))
+  assert.equal(limits.checkFlag(fakeDb(many), 'A', NOW, { FLAG_PER_IDENTITY_PER_DAY: 100 }).code, 'RATE_LIMITED')
+  assert.ok(limits.checkFlag(fakeDb(many.slice(1)), 'A', NOW, { FLAG_PER_IDENTITY_PER_DAY: 100 }).ok)
 })
 
 console.log('\n== 单测：检索 ==')
