@@ -27,6 +27,7 @@ const { conclude } = require(S('conclude'))
 const limits = require(S('limits'))
 const { runPipeline } = require(S('core'))
 const { proposeRewrites } = require(S('rewrite'))
+const moderation = require(S('moderation'))
 
 let passed = 0
 let failed = 0
@@ -274,6 +275,38 @@ test('TRUST_PROXY=1 时才取代理头', () => {
   }
 })
 
+console.log('\n== 单测：内容安全（本地词库）==')
+const L = { words: ['碎尸', '洗钱', '约炮'].map(moderation.compact), allow: ['反洗钱'].map(moderation.compact) }
+test('命中敏感词', () => assert.equal(moderation.localCheck('他描述了碎尸的过程', L), '碎尸'))
+test('空格/符号/全角变形也能命中', () => {
+  assert.equal(moderation.localCheck('碎 尸', L), '碎尸')
+  assert.equal(moderation.localCheck('碎*尸', L), '碎尸')
+  assert.equal(moderation.localCheck('约　炮！', L), '约炮')
+})
+test('白名单不误伤（反洗钱）', () => assert.equal(moderation.localCheck('负责反洗钱系统建设', L), null))
+test('白名单只遮自己那段，别处的敏感词照拦', () => assert.equal(moderation.localCheck('负责反洗钱系统，私下帮人洗钱', L), '洗钱'))
+test('正常简历不误伤（默认词库）', () => {
+  const text = fs.readFileSync(path.join(ROOT, 'examples', 'resume.txt'), 'utf8') +
+    fs.readFileSync(path.join(ROOT, 'examples', 'jd.txt'), 'utf8') +
+    '负责秒杀系统、杀毒引擎、暴力破解防护，用户量爆炸式增长；反洗钱合规平台'
+  assert.equal(moderation.localCheck(text), null)
+})
+test('默认词库可加载且能命中', () => assert.equal(moderation.localCheck('网上看到血腥视频'), '血腥'))
+test('微信送检按行切段且每段不超长', () => {
+  const pieces = moderation.chunk(['a'.repeat(1500), 'b'.repeat(1500), 'c'.repeat(4500)].join('\n'), 2000)
+  assert.ok(pieces.every((p) => p.length <= 2000))
+  assert.equal(pieces.join('').replace(/\n/g, '').length, 7500)
+})
+test('被拦截 10 分钟内达上限 → RATE_LIMITED（身份或 IP 任一）', () => {
+  const cfg = { MODERATION_BLOCKS_PER_10MIN: 5 }
+  const five = Array.from({ length: 5 }, (_, i) => u('blocked', 'A', 'ip1', NOW - i * 1000))
+  assert.equal(limits.checkBlocked(fakeDb(five), 'A', 'ipX', NOW, cfg).code, 'RATE_LIMITED')
+  assert.equal(limits.checkBlocked(fakeDb(five), 'B', 'ip1', NOW, cfg).code, 'RATE_LIMITED')
+  assert.ok(limits.checkBlocked(fakeDb(five.slice(1)), 'A', 'ip1', NOW, cfg).ok)
+  const old = Array.from({ length: 5 }, () => u('blocked', 'A', 'ip1', NOW - 11 * 60e3))
+  assert.ok(limits.checkBlocked(fakeDb(old), 'A', 'ip1', NOW, cfg).ok)
+})
+
 console.log('\n== 单测：检索 ==')
 const reqForRetrieval = { id: 'R1', text: '精通 Kubernetes 容器编排', skill: 'kubernetes' }
 test('别名命中排第一', () => {
@@ -300,6 +333,117 @@ console.log('\n== 集成：mock 流水线（examples 简历 + JD）==')
     await testAsync('未配 AppID 时设备 ID 兜底可用', async () => {
       assert.deepEqual(await auth.identityFor({ deviceId: 'dabcdefgh123' }), { sub: 'd:dabcdefgh123', kind: 'device' })
     })
+
+    // 起一个本地假微信接口，验证 msgSecCheck 的判定与降级
+    const withFakeWx = async (handler, fn) => {
+      const calls = { token: 0, check: 0, bodies: [] }
+      const srv = http.createServer((req, res) => {
+        let d = ''
+        req.on('data', (c) => (d += c))
+        req.on('end', () => {
+          const body = d ? JSON.parse(d) : {}
+          const out = handler(req.url, body, calls)
+          if (out === 'HANG') return // 不回包，触发超时
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(out))
+        })
+      })
+      await new Promise((r) => srv.listen(0, '127.0.0.1', r))
+      const saved = { base: config.WX_API_BASE, id: config.WX_APPID, secret: config.WX_APPSECRET, t: config.WX_SEC_TIMEOUT_MS }
+      config.WX_API_BASE = `http://127.0.0.1:${srv.address().port}`
+      config.WX_APPID = 'wx_test'
+      config.WX_APPSECRET = 'secret'
+      config.WX_SEC_TIMEOUT_MS = 300
+      moderation._resetToken()
+      try {
+        await fn(calls)
+      } finally {
+        Object.assign(config, { WX_API_BASE: saved.base, WX_APPID: saved.id, WX_APPSECRET: saved.secret, WX_SEC_TIMEOUT_MS: saved.t })
+        moderation._resetToken()
+        srv.close()
+      }
+    }
+    const wxHandler = (suggest, { tokenErrOnce = false } = {}) => (url, body, calls) => {
+      if (url.startsWith('/cgi-bin/stable_token')) {
+        calls.token++
+        return { access_token: 'tok' + calls.token, expires_in: 7200 }
+      }
+      calls.check++
+      calls.bodies.push(body)
+      if (tokenErrOnce && calls.check === 1) return { errcode: 40001, errmsg: 'invalid credential' }
+      return { errcode: 0, errmsg: 'ok', result: { suggest, label: suggest === 'pass' ? 100 : 20002 } }
+    }
+    const ITEMS = [{ field: 'resume', text: '五年后端开发经验', scene: 'profile' }]
+
+    await testAsync('未配置微信：只查本地词库，放行', async () => {
+      const r = await moderation.checkTexts(ITEMS, { owner: 'd:dev12345678' })
+      assert.deepEqual(r, { ok: true, wechatChecked: false })
+    })
+    await testAsync('本地词库命中：直接拦截，不调微信', () =>
+      withFakeWx(wxHandler('pass'), async (calls) => {
+        const r = await moderation.checkTexts([{ field: 'jd', text: '血腥画面', scene: 'profile' }], { owner: 'o:oid' })
+        assert.equal(r.blocked, true)
+        assert.equal(r.source, 'local')
+        assert.equal(calls.check, 0)
+      }))
+    await testAsync('微信 pass → 放行，送检带 openid / version 2 / scene', () =>
+      withFakeWx(wxHandler('pass'), async (calls) => {
+        const r = await moderation.checkTexts(ITEMS, { owner: 'o:oid' })
+        assert.deepEqual(r, { ok: true, wechatChecked: true })
+        assert.deepEqual(calls.bodies[0], { content: '五年后端开发经验', version: 2, scene: 1, openid: 'oid' })
+      }))
+    await testAsync('微信 risky → 拦截', () =>
+      withFakeWx(wxHandler('risky'), async () => {
+        const r = await moderation.checkTexts(ITEMS, { owner: 'o:oid' })
+        assert.equal(r.blocked, true)
+        assert.equal(r.source, 'wechat')
+      }))
+    await testAsync('微信 review → 放行（只记日志）', () =>
+      withFakeWx(wxHandler('review'), async () => {
+        assert.equal((await moderation.checkTexts(ITEMS, { owner: 'o:oid' })).ok, true)
+      }))
+    await testAsync('微信超时 → unavailable（调用方判提交失败）', () =>
+      withFakeWx((url, body, calls) => (url.startsWith('/cgi-bin') ? { access_token: 't', expires_in: 7200 } : 'HANG'), async () => {
+        const r = await moderation.checkTexts(ITEMS, { owner: 'o:oid' })
+        assert.equal(r.unavailable, true)
+      }))
+    await testAsync('微信报错（非 token 问题）→ unavailable', () =>
+      withFakeWx((url) => (url.startsWith('/cgi-bin') ? { access_token: 't', expires_in: 7200 } : { errcode: 45009, errmsg: 'limit' }), async () => {
+        assert.equal((await moderation.checkTexts(ITEMS, { owner: 'o:oid' })).unavailable, true)
+      }))
+    await testAsync('access_token 失效 → 强制刷新后重试一次成功', () =>
+      withFakeWx(wxHandler('pass', { tokenErrOnce: true }), async (calls) => {
+        assert.equal((await moderation.checkTexts(ITEMS, { owner: 'o:oid' })).ok, true)
+        assert.equal(calls.token, 2)
+        assert.equal(calls.check, 2)
+      }))
+    await testAsync('access_token 进程内缓存（第二次不再取 token）', () =>
+      withFakeWx(wxHandler('pass'), async (calls) => {
+        await moderation.checkTexts(ITEMS, { owner: 'o:oid' })
+        await moderation.checkTexts(ITEMS, { owner: 'o:oid' })
+        assert.equal(calls.token, 1)
+      }))
+    await testAsync('配了微信但会话没有 openid → unavailable', () =>
+      withFakeWx(wxHandler('pass'), async (calls) => {
+        assert.equal((await moderation.checkTexts(ITEMS, { owner: 'd:dev12345678' })).unavailable, true)
+        assert.equal(calls.check, 0)
+      }))
+    await testAsync('长文本分段送检，任一段 risky 即拦截', () =>
+      withFakeWx((url, body, calls) => {
+        if (url.startsWith('/cgi-bin')) return { access_token: 't', expires_in: 7200 }
+        calls.check++
+        return { errcode: 0, result: { suggest: body.content.includes('X') ? 'risky' : 'pass', label: 20001 } }
+      }, async (calls) => {
+        const text = 'a'.repeat(1900) + '\n' + 'b'.repeat(1900) + '\nX'
+        const r = await moderation.checkTexts([{ field: 'resume', text, scene: 'profile' }], { owner: 'o:oid' })
+        assert.equal(r.blocked, true)
+        assert.equal(calls.check, 2)
+      }))
+    await testAsync('skipWechat：只查本地', () =>
+      withFakeWx(wxHandler('risky'), async (calls) => {
+        assert.deepEqual(await moderation.checkTexts(ITEMS, { owner: 'o:oid', skipWechat: true }), { ok: true, wechatChecked: false })
+        assert.equal(calls.check, 0)
+      }))
 
     // 起一个本地假 LLM，验证重试策略
     const withFakeLLM = async (status, fn) => {

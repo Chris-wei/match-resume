@@ -10,6 +10,7 @@
                                  ├─ 流水线：切分 → JD拆解(LLM，按 JD 缓存) → 检索 → 判定(LLM，批次独立) → 引用校验(代码) → 打分(代码)
                                  ├─ 改写建议：主报告出来后后台生成，报告页自动刷新
                                  ├─ 风控：身份日限 / 10分钟窗 / IP限制 / 全站日限 / 复制限3条
+                                 ├─ 内容安全：本地敏感词库 → 微信 msgSecCheck（命中即拦，不扣次数）
                                  └─ 存储：data/db.json（脱敏报告 30 天 + 限流计数 90 天；简历按行脱敏后存储，见下方隐私说明）
 ```
 
@@ -68,7 +69,7 @@ node server/index.js
 ### 3. 跑内核测试（不需要任何账号）
 
 ```bash
-npm test    # 66 项断言：脱敏 / 引用定位 / 幻觉降级 / 打分确定性 / 一句话结论 / 风控 / 身份与 IP / LLM 重试与时限 / 判定部分失败 / JD 缓存 / mock 全链路
+npm test    # 91 项断言：脱敏 / 引用定位 / 幻觉降级 / 打分确定性 / 一句话结论 / 风控 / 内容安全 / 身份与 IP / LLM 重试与时限 / 判定部分失败 / JD 缓存 / mock 全链路
 ```
 
 ### 4. 微信开发者工具
@@ -87,6 +88,8 @@ export WX_APPSECRET=你的secret   # 小程序后台「开发管理→开发设�
 ```
 
 小程序端 `wx.login` 的 code 会自动换取 openid 作为身份。**配置后强制 openid**：换不到 openid 就拒绝建立会话，不再退回设备 ID（否则不传 code 就能绕过）。
+
+配置后同时启用**微信内容安全检查**（msgSecCheck），见下方「内容安全」。
 
 ### 6.（部署时）反向代理
 
@@ -126,6 +129,20 @@ export TRUST_PROXY=1
 - 存储：内存为准，200ms 内的写入合并为一次落盘，退出时同步刷盘
 - PDF：在独立 worker 线程解析（15s 超时 + 内存上限，禁用 pdfjs eval），每人 10 分钟 5 次 / 每天 20 次
 
+## 内容安全（`server/moderation.js`）
+
+```
+检查顺序：被拦试探限制 → 本地敏感词库 → (复用旧报告 / 额度检查) → 微信 msgSecCheck → 预占额度、开始分析
+```
+
+- **范围**：分析提交的简历 + JD（截断后、实际会被分析的部分），反馈留言。PDF 解析出的文字回填输入框，提交分析时一起查
+- **本地词库**：`server/sensitive-words.txt`（命中即拦）+ `server/sensitive-allow.txt`（白名单，如「反洗钱」不因含「洗钱」被拦），一行一个，改完重启生效。匹配前统一全角半角/大小写并去掉空白、标点、符号，「血 腥」「血-腥」也能命中。当前是种子词表，**上线前请按业务补充**；单字和常见业务词（杀毒、秒杀、暴力破解）别放，会误伤简历
+- **微信 msgSecCheck 2.0**：配了 `WX_APPID`/`WX_APPSECRET` 才启用，以微信判定为准：`risky` 拦截，`review` 放行只记日志。access_token 用 `getStableAccessToken`（与同 AppID 的其他服务不互相顶掉），失效自动刷新重试一次；长文本按 2000 字分段并行送检，单次超时 `WX_SEC_TIMEOUT_MS`（5s）
+- **降级**：配了微信但调用失败 → 提交失败（`MODERATION_UNAVAILABLE`，不扣次数）；没配 → 只查本地词库（启动日志与 `/api/health` 的 `moderation` 字段显示 `local` / `local+wechat`）
+- **拦截**：返回 `CONTENT_BLOCKED`，不告诉用户命中了什么、不扣次数；内容不发模型、不存储，日志只记字段 + 命中词/类别。10 分钟内被拦 `MODERATION_BLOCKS_PER_10MIN`（5）次（身份或 IP 任一）即提示「操作太频繁」，防反复试探
+- **隐私**：送微信的是脱敏后的文本（无联系方式、姓名），隐私政策 §3 已写明
+- **复用报告**：命中缓存时只查本地词库（词库更新同样生效）；没经过微信检查的旧报告（`wxChecked` 为假）补查一次
+
 ## 项目结构
 
 ```
@@ -145,9 +162,11 @@ export TRUST_PROXY=1
 │   ├── mock.js                # 无 API_KEY 时启发式替身
 │   ├── prompts/               # 三个 prompt 集中管理（调手感只改这里）
 │   ├── limits.js / auth.js / db.js  # 风控 / 身份 / JSON 存储
+│   ├── moderation.js          # 内容安全：本地词库 + 微信 msgSecCheck
+│   ├── sensitive-words.txt / sensitive-allow.txt  # 敏感词库 / 白名单
 │   └── config.js              # 所有参数集中一处
 ├── examples/                  # 测试简历 + JD
-├── scripts/test-local.js      # 66 项内核测试
+├── scripts/test-local.js      # 91 项内核测试
 └── docs/design.md             # 设计文档（含云开发版的历史方案，可对照）
 ```
 
@@ -170,5 +189,5 @@ export TRUST_PROXY=1
 
 - **localhost 只能在开发者工具里跑**：真机预览需要服务部署到带 HTTPS 域名的服务器（小程序强制要求），到那一步再考虑服务器部署 / 备案
 - 法律文案仍是草案（legal 页有水印），**开始收钱前找律师过一遍**
-- 内容安全检查（msgSecCheck）本地版未接：公开发布前在服务端接入或依赖小程序平台侧审核
+- 内容安全：本地词库是种子版，上线前按业务补充；微信 msgSecCheck 需配 `WX_APPID`/`WX_APPSECRET` 才生效
 - 反馈里的「付费意愿」数据存在 `data/db.json` 的 feedback 集合——这就是设计文档 D.1 要的付费验证数据

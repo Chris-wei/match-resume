@@ -62,6 +62,16 @@ module.exports = {
   PDF_PER_IDENTITY_PER_10MIN: intEnv('PDF_PER_IDENTITY_PER_10MIN', 5),
   PDF_PER_IDENTITY_PER_DAY: intEnv('PDF_PER_IDENTITY_PER_DAY', 20),
   PDF_TIMEOUT_MS: 15000,
+  // 内容安全：被拦截的提交单独计数，10 分钟内超过次数提示"操作太频繁"（身份、IP 各自计），防反复试探绕过
+  MODERATION_BLOCKS_PER_10MIN: intEnv('MODERATION_BLOCKS_PER_10MIN', 5),
+
+  // ---- 内容安全（本地词库 → 微信 msgSecCheck；微信部分复用上面的 WX_APPID/WX_APPSECRET）----
+  SENSITIVE_WORDS_FILE: process.env.SENSITIVE_WORDS_FILE || path.join(__dirname, 'sensitive-words.txt'),
+  SENSITIVE_ALLOW_FILE: process.env.SENSITIVE_ALLOW_FILE || path.join(__dirname, 'sensitive-allow.txt'),
+  WX_API_BASE: process.env.WX_API_BASE || 'https://api.weixin.qq.com',
+  WX_SEC_TIMEOUT_MS: intEnv('WX_SEC_TIMEOUT_MS', 5000),
+  // msgSecCheck 单次文本上限 2500 字，留余量按 2000 字切段
+  WX_SEC_CHUNK_CHARS: 2000,
 
   // ---- 输入上限 ----
   MAX_RESUME_CHARS: intEnv('MAX_RESUME_CHARS', 4000),

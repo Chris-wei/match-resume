@@ -6,6 +6,7 @@ const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const https = require('https')
+const http = require('http')
 const config = require('./config')
 
 let cachedSecret = null
@@ -55,7 +56,7 @@ function verifyToken(token) {
 
 function httpsGetJSON(url) {
   return new Promise((resolve, reject) => {
-    https
+    ;(url.startsWith('http:') ? http : https)
       .get(url, (res) => {
         let d = ''
         res.setEncoding('utf8')
@@ -77,7 +78,7 @@ async function codeToOpenid(code) {
   if (!config.WX_APPID || !config.WX_APPSECRET || !code) return null
   try {
     const res = await httpsGetJSON(
-      `https://api.weixin.qq.com/sns/jscode2session?appid=${encodeURIComponent(config.WX_APPID)}&secret=${encodeURIComponent(config.WX_APPSECRET)}&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`
+      `${config.WX_API_BASE}/sns/jscode2session?appid=${encodeURIComponent(config.WX_APPID)}&secret=${encodeURIComponent(config.WX_APPSECRET)}&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`
     )
     if (res && res.openid) return res.openid
     console.warn('code2session failed:', res && res.errcode, res && res.errmsg)

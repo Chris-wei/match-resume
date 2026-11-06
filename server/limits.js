@@ -76,6 +76,19 @@ function checkPdf(db, owner, now = Date.now(), cfg = config) {
   return { ok: true }
 }
 
+/**
+ * 内容安全拦截后的试探限制：10 分钟内被拦次数达上限（身份或 IP 任一）即拒。
+ * 被拦截的提交不扣分析次数，没有这道闸就能无限次换说法试探词库 / 刷微信接口。
+ */
+function checkBlocked(db, owner, ipHash, now = Date.now(), cfg = config) {
+  const since = now - TEN_MIN_MS
+  const max = cfg.MODERATION_BLOCKS_PER_10MIN
+  if (count(db, { kind: 'blocked', owner }, since) >= max || count(db, { kind: 'blocked', ipHash }, since) >= max) {
+    return { ok: false, code: 'RATE_LIMITED', message: '操作太频繁，请 10 分钟后再试' }
+  }
+  return { ok: true }
+}
+
 /** 本地时区的 YYYY-MM-DD（与日限的自然日口径一致；toISOString 是 UTC，凌晨会差一天）。 */
 function localDateKey(now) {
   const d = new Date(now)
@@ -102,4 +115,4 @@ function quotaInfo(db, owner, ipHash, now = Date.now(), cfg = config) {
   }
 }
 
-module.exports = { checkAnalyze, checkCopy, checkPdf, quotaInfo, dayStart, localDateKey, DAY_MS }
+module.exports = { checkAnalyze, checkCopy, checkPdf, checkBlocked, quotaInfo, dayStart, localDateKey, DAY_MS }

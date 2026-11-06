@@ -23,7 +23,9 @@ const { issueToken, verifyToken, identityFor, ipHashOf, bearerToken } = require(
 const limits = require('./limits')
 const { runPipeline } = require('./core')
 const { proposeRewrites } = require('./rewrite')
-const { redact } = require('./redact')
+const { redact, redactSpans } = require('./redact')
+const { segmentResume } = require('./segment')
+const moderation = require('./moderation')
 const { normalize } = require('./text')
 const { extractFromBuffer } = require('./pdfExtract')
 
@@ -75,8 +77,26 @@ function auth(req) {
 
 function reportView(doc) {
   // 免费版：全部内容直接下发（裁剪点收口在服务端，将来分层只改这里）
-  const { owner, inputHash, ...view } = doc
+  const { owner, inputHash, wxChecked, ...view } = doc
   return view
+}
+
+// ---------------- 内容安全 ----------------
+
+/** 送检的简历：与送给模型的一致（联系方式已脱敏，再按行切分后脱敏姓名），不把姓名交给微信。 */
+function resumeForModeration(resume) {
+  const spans = redactSpans(segmentResume(resume))
+  return spans.length ? spans.map((s) => s.text).join('\n') : resume
+}
+
+/** 内容安全未通过的统一响应：命中违规计一次"被拦截"（防试探），接口不可用不计。 */
+function moderationFail(res, ctx, result) {
+  if (result.unavailable) {
+    return send(res, 200, fail('MODERATION_UNAVAILABLE', '内容安全检查暂时不可用，请稍后再试（本次不消耗次数）'))
+  }
+  db.recordUsage('blocked', ctx.owner, ctx.ipHash, Date.now())
+  // 不告诉用户命中了哪个词，避免被用来试探词库
+  return send(res, 200, fail('CONTENT_BLOCKED', '提交内容包含违规信息，请修改后再试'))
 }
 
 const VALID_FB = {
@@ -118,7 +138,7 @@ const jdCache = {
 
 // ---------------- 分析任务 ----------------
 
-async function runAnalyzeJob(job, { resume, jd, owner, usageId, inputHash }) {
+async function runAnalyzeJob(job, { resume, jd, owner, usageId, inputHash, wxChecked }) {
   const startedAt = Date.now()
   // 主报告的总时限：超时即失败并退还次数，前端轮询一定能看到终态
   const deadline = startedAt + config.ANALYZE_DEADLINE_MS
@@ -146,6 +166,8 @@ async function runAnalyzeJob(job, { resume, jd, owner, usageId, inputHash }) {
     createdAt: now,
     expiresAt: now + config.REPORT_TTL_DAYS * DAY_MS,
     mock: config.LLM_MOCK,
+    // 输入是否经过微信内容安全检查（复用报告时据此决定要不要补查）
+    wxChecked: !!wxChecked,
     score: pipeline.score,
     conclusion: pipeline.conclusion,
     requirements: pipeline.requirements,
@@ -190,7 +212,8 @@ const routes = {
       ok: true,
       mock: config.LLM_MOCK,
       model: config.LLM_MOCK ? 'mock' : config.LLM_MODEL,
-      judgeModel: config.LLM_MOCK ? 'mock' : judgeModel()
+      judgeModel: config.LLM_MOCK ? 'mock' : judgeModel(),
+      moderation: moderation.mode()
     })
   },
 
@@ -219,13 +242,30 @@ const routes = {
     if (jdText.length < config.MIN_JD_CHARS) {
       return send(res, 200, fail('INVALID_INPUT', `JD 内容太短，至少 ${config.MIN_JD_CHARS} 字`))
     }
+    // 送检与送模型的都是截断后的文本（超出部分不会被分析）
     const resume = redact(resumeRaw.slice(0, config.MAX_RESUME_CHARS))
     const jd = jdText.slice(0, config.MAX_JD_CHARS)
     const inputHash = inputHashOf(resume, jd)
 
+    // ⓪ 内容安全：先挡住反复被拦的试探，再查本地词库（复用旧报告前也要查：词库更新后同样生效）
+    const blk = limits.checkBlocked(db, ctx.owner, ctx.ipHash)
+    if (!blk.ok) return send(res, 200, blk)
+    const modItems = [
+      { field: 'resume', text: resumeForModeration(resume), scene: 'profile' },
+      { field: 'jd', text: jd, scene: 'profile' }
+    ]
+    const localMod = await moderation.checkTexts(modItems, { skipWechat: true })
+    if (!localMod.ok) return moderationFail(res, ctx, localMod)
+
     // ① 同一输入已有报告 → 直接复用：不扣次数、不花 API 费，分数也和上次一致
     const existing = db.findReportByInput(ctx.owner, inputHash)
     if (existing) {
+      // 没经过微信检查的旧报告（功能上线前生成 / 当时未配置）补查一次
+      if (moderation.wechatEnabled() && !existing.wxChecked) {
+        const wx = await moderation.checkTexts(modItems, { owner: ctx.owner })
+        if (!wx.ok) return moderationFail(res, ctx, wx)
+        db.updateReport(existing.reportId, ctx.owner, { wxChecked: true })
+      }
       // 上次改写建议没生成出来 → 借这次提交再补一次（不扣次数）
       if (existing.rewritesStatus === 'failed') {
         existing.rewritesStatus = 'pending'
@@ -235,21 +275,35 @@ const routes = {
     }
 
     // ② 同一身份已有任务在跑：同一输入就接着轮询它（连点/重进页面），不同输入请稍候
-    const running = jobs.runningFor(ctx.owner)
-    if (running) {
-      if (running.inputHash === inputHash) return send(res, 200, { ok: true, ...jobs.view(running) })
-      return send(res, 200, fail('BUSY', '上一份报告还在分析中，请稍候再提交'))
+    // ③ 风控额度检查
+    // 微信检查要 await，期间可能有并发请求抢先建了任务/占了额度，所以检查完要再走一遍 ②③
+    const precheck = () => {
+      const running = jobs.runningFor(ctx.owner)
+      if (running) {
+        if (running.inputHash === inputHash) return { ok: true, ...jobs.view(running) }
+        return fail('BUSY', '上一份报告还在分析中，请稍候再提交')
+      }
+      return limits.checkAnalyze(db, ctx.owner, ctx.ipHash, Date.now())
+    }
+    let pre = precheck()
+    if (!pre.ok || pre.jobId) return send(res, 200, pre)
+
+    // 微信内容安全检查放在额度检查之后：额度用完的请求不再消耗微信接口调用
+    let wxChecked = false
+    if (moderation.wechatEnabled()) {
+      const wx = await moderation.checkTexts(modItems, { owner: ctx.owner })
+      if (!wx.ok) return moderationFail(res, ctx, wx)
+      wxChecked = wx.wechatChecked
+      pre = precheck()
+      if (!pre.ok || pre.jobId) return send(res, 200, pre)
     }
 
-    // ③ 风控：检查通过后立即"预占"一次额度（同步完成，中间没有 await），
+    // 检查通过后立即"预占"一次额度（从 precheck 到这里同步完成，中间没有 await），
     // 并发请求看到的计数已包含这次；分析失败再退还，保证"失败不扣次数"
-    const now = Date.now()
-    const lim = limits.checkAnalyze(db, ctx.owner, ctx.ipHash, now)
-    if (!lim.ok) return send(res, 200, lim)
-    const usageId = db.recordUsage('analyze', ctx.owner, ctx.ipHash, now, { pending: true })
+    const usageId = db.recordUsage('analyze', ctx.owner, ctx.ipHash, Date.now(), { pending: true })
 
     const job = jobs.create(ctx.owner, inputHash)
-    runAnalyzeJob(job, { resume, jd, owner: ctx.owner, usageId, inputHash }).catch((e) => {
+    runAnalyzeJob(job, { resume, jd, owner: ctx.owner, usageId, inputHash, wxChecked }).catch((e) => {
       // runAnalyzeJob 内部已兜底，这里只防意外
       console.error('job crashed:', e)
       db.removeUsage(usageId)
@@ -322,6 +376,12 @@ const routes = {
     if (!VALID_FB.q1.includes(q1)) return send(res, 200, fail('BAD_FEEDBACK', '反馈第 1 题选项无效'))
     if (!VALID_FB.q2.includes(q2)) return send(res, 200, fail('BAD_FEEDBACK', '反馈第 2 题选项无效'))
     const comment = typeof b.comment === 'string' ? b.comment.trim().slice(0, 300) : ''
+    if (comment) {
+      const blk = limits.checkBlocked(db, ctx.owner, ctx.ipHash)
+      if (!blk.ok) return send(res, 200, blk)
+      const mod = await moderation.checkTexts([{ field: 'comment', text: redact(comment), scene: 'comment' }], { owner: ctx.owner })
+      if (!mod.ok) return moderationFail(res, ctx, mod)
+    }
     db.upsertFeedback({ owner: ctx.owner, reportId, q1, q2, comment, createdAt: Date.now() })
     send(res, 200, { ok: true })
   },
@@ -433,4 +493,9 @@ server.listen(config.PORT, () => {
   if (!config.WX_APPID) {
     console.log('⚠ 未配置 WX_APPID/WX_APPSECRET，身份用设备 ID 兜底（风控含 IP 限制）')
   }
+  console.log(
+    moderation.wechatEnabled()
+      ? '内容安全：本地词库 + 微信 msgSecCheck（微信不可用时提交失败）'
+      : '⚠ 内容安全：仅本地词库（未配置 WX_APPID/WX_APPSECRET，跳过微信 msgSecCheck）'
+  )
 })
