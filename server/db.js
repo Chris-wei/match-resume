@@ -117,7 +117,8 @@ function removeReport(reportId, owner, now = Date.now()) {
 
 function updateReport(reportId, owner, patch) {
   const doc = getReport(reportId)
-  if (!doc || doc.owner !== owner) return false
+  // 用户删除后 owner 被清空：空 owner 或已删除的报告一律拒绝写入（防改写建议写回已脱敏的报告）
+  if (!owner || !doc || doc.owner !== owner || doc.deletedByUser) return false
   Object.assign(doc, patch)
   save()
   return true
@@ -175,13 +176,13 @@ function releasePendingUsage() {
 // 反馈逻辑见 feedback.js（整份反馈合并保存，不覆盖逐条判错）
 function saveFeedbackForm(owner, reportId, form, now = Date.now()) {
   const doc = feedback.saveForm(data, owner, reportId, form, now)
-  save()
+  if (doc) save()
   return doc
 }
 
 function setWrongItem(owner, reportId, reqId, wrong, now = Date.now()) {
   const ids = feedback.setWrong(data, owner, reportId, reqId, wrong, now)
-  save()
+  if (ids) save()
   return ids
 }
 

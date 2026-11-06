@@ -205,6 +205,8 @@ async function runAnalyzeJob(job, { resume, jd, owner, usageId, inputHash, wxChe
 }
 
 async function generateRewrites(doc) {
+  // 在 await 之前记下归属：doc 是库里的同一个对象，用户删除时 owner 会被清空
+  const owner = doc.owner
   let patch
   try {
     const rewrites = await proposeRewrites(doc.requirements, doc.judgments, {
@@ -216,7 +218,7 @@ async function generateRewrites(doc) {
     patch = { rewritesStatus: 'failed' }
   }
   // 用户可能在生成期间删了报告，updateReport 会返回 false，忽略即可
-  db.updateReport(doc.reportId, doc.owner, patch)
+  db.updateReport(doc.reportId, owner, patch)
 }
 
 // ---------------- 路由 ----------------
@@ -391,6 +393,7 @@ const routes = {
     const lim = limits.checkFlag(db, ctx.owner)
     if (!lim.ok) return send(res, 200, lim)
     const wrongItems = db.setWrongItem(ctx.owner, doc.reportId, reqId, ctx.body.wrong)
+    if (!wrongItems) return send(res, 200, fail('NOT_FOUND', '报告不存在或已被删除'))
     // 限流计数不带报告引用，避免 usage 里留下报告与用户的关联
     db.recordUsage('flag', ctx.owner, ctx.ipHash, Date.now())
     send(res, 200, { ok: true, wrongItems })
@@ -413,7 +416,10 @@ const routes = {
       if (!mod.ok) return moderationFail(res, ctx, mod)
     }
     // 合并保存（不覆盖逐条判错）；留言入库前去掉联系方式
-    db.saveFeedbackForm(ctx.owner, reportId, { q1, q2, comment: redact(comment) })
+    // 内容安全检查有 await，期间用户可能删了报告：saveFeedbackForm 会重新校验归属，失败返回 null
+    if (!db.saveFeedbackForm(ctx.owner, reportId, { q1, q2, comment: redact(comment) })) {
+      return send(res, 200, fail('NOT_FOUND', '报告不存在或已被删除'))
+    }
     send(res, 200, { ok: true })
   },
 

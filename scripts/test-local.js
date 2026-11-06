@@ -530,6 +530,30 @@ test('后台页面不用 innerHTML 渲染（防留言注入）', () => {
   assert.ok(!/innerHTML\s*=|insertAdjacentHTML|document\.write/.test(html))
 })
 
+console.log('\n== 单测：留存（审阅修复）==')
+test('过期断开关联时也清掉 usage 里的报告引用', () => {
+  const d = mkData()
+  d.usage.push({ kind: 'copy', owner: 'u1', ref: 'rB#1', createdAt: NOW })
+  retention.prune(d, NOW, RCFG)
+  assert.equal(d.usage.find((x) => x.kind === 'copy' && x.createdAt === NOW && x.ref === 'rB#1'), undefined)
+})
+test('迁移与清理：报告已不存在的老反馈断开与用户的关联', () => {
+  const d = mkData()
+  retention.migrate(d)
+  assert.equal(d.feedback.find((f) => f.reportId === 'rGone').owner, '')
+  const d2 = mkData()
+  retention.prune(d2, NOW, RCFG)
+  assert.equal(d2.feedback.find((f) => f.reportId === 'rGone').owner, '')
+})
+test('报告已被用户删除后，反馈 / 判错写入被拒绝，不重新建立关联', () => {
+  const d = mkData()
+  retention.deleteReport(d, 'rC', 'u1', NOW)
+  assert.equal(fb.saveForm(d, 'u1', 'rC', { q1: 'accurate', q2: 'none', comment: '' }, NOW), null)
+  assert.equal(fb.setWrong(d, 'u1', 'rC', 'R1', true, NOW), null)
+  assert.ok(!d.feedback.some((f) => f.reportId === 'rC' && f.owner === 'u1'))
+  assert.equal(d.feedback.filter((f) => f.reportId === 'rC').length, 1)
+})
+
 console.log('\n== 单测：检索 ==')
 const reqForRetrieval = { id: 'R1', text: '精通 Kubernetes 容器编排', skill: 'kubernetes' }
 test('别名命中排第一', () => {

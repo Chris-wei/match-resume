@@ -151,6 +151,56 @@ async function adminLogin(base, password) {
       assert.equal(r.status, 401)
     })
 
+    await testAsync('并发爆破：同时发 20 次错误密码，最多 5 次得到"密码错误"', async () => {
+      const D = await startServer({ ADMIN_PASSWORD: 'test-admin' })
+      try {
+        // 先把 20 个请求的请求头都发出去，稍后再发 body：所有请求都在第一次失败被记下之前通过锁定检查
+        const slowLogin = () =>
+          new Promise((resolve, reject) => {
+            const body = Buffer.from(JSON.stringify({ password: 'wrong' }))
+            const req = http.request(D.base + '/admin/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': body.length } }, (res) => {
+              let d = ''
+              res.on('data', (c) => (d += c))
+              res.on('end', () => resolve({ status: res.statusCode, json: JSON.parse(d) }))
+            })
+            req.on('error', reject)
+            req.flushHeaders()
+            setTimeout(() => req.end(body), 300)
+          })
+        const rs = await Promise.all(Array.from({ length: 20 }, slowLogin))
+        const bad = rs.filter((x) => x.json.code === 'BAD_PASSWORD').length
+        assert.ok(bad <= 5, `BAD_PASSWORD ${bad} 次`)
+        assert.ok(rs.every((x) => x.status === 200))
+      } finally {
+        D.stop()
+      }
+    })
+    await testAsync('删除后再写报告（改写建议生成完成）被拒绝，不写回简历原句', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-resume-db-'))
+      try {
+        const script = `
+          const db = require(${JSON.stringify(path.join(ROOT, 'server', 'db'))})
+          const doc = { reportId: 'r1', owner: 'u1', inputHash: 'h', createdAt: Date.now(), expiresAt: Date.now() + 1e9, retained: false,
+            spans: [{ id: 'S1', text: 'secret' }], judgments: [{ reqId: 'R1', verdict: 'hit', quote: 'secret', quoteId: 'S1' }],
+            requirements: [{ id: 'R1' }], rewrites: [], rewritesStatus: 'pending' }
+          db.insertReport(doc)
+          db.setWrongItem('u1', 'r1', 'R1', true)
+          db.removeReport('r1', 'u1')
+          // generateRewrites 在 await 之后用 doc.owner 写回
+          const a = db.updateReport(doc.reportId, doc.owner, { rewrites: [{ original: 'secret' }], rewritesStatus: 'done' })
+          const b = db.updateReport('r1', 'u1', { rewrites: [{ original: 'secret' }] })
+          console.log(JSON.stringify({ a, b, rewrites: db.getReport('r1').rewrites }))
+          db.flush()`
+        const out = require('child_process').execFileSync(process.execPath, ['-e', script], { env: { ...process.env, DATA_DIR: dir, LLM_MOCK: '1' } }).toString()
+        const r = JSON.parse(out.trim().split('\n').pop())
+        assert.equal(r.a, false)
+        assert.equal(r.b, false)
+        assert.deepEqual(r.rewrites, [])
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    })
+
     let cookie = ''
     await testAsync('正确登录 → HttpOnly cookie，后台接口可用', async () => {
       const { r, cookie: c } = await adminLogin(B.base, 'test-admin')

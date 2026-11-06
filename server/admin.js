@@ -120,8 +120,12 @@ async function handle(req, res, url) {
       return sendJSON(res, 200, fail('LOCKED', '尝试次数过多，请 10 分钟后再试'))
     }
     const body = await readJSON(req)
+    // 读 body 期间可能有并发请求已记下失败：比较密码前再查一次，防并发爆破
+    if (recentFailures(ipHash, Date.now()).length >= LOCK_MAX_FAILURES) {
+      return sendJSON(res, 200, fail('LOCKED', '尝试次数过多，请 10 分钟后再试'))
+    }
     if (!body || !passwordOk(body.password)) {
-      failures.get(ipHash).push(now)
+      recentFailures(ipHash, Date.now()).push(Date.now())
       return sendJSON(res, 200, fail('BAD_PASSWORD', '密码错误'))
     }
     failures.delete(ipHash)

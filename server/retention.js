@@ -39,14 +39,30 @@ function migrate(data) {
     }
     if (touched) changed++
   }
+  changed += unlinkOrphanFeedback(data)
   return changed
 }
 
-/** 断开报告（及其反馈）与用户的关联 */
+/** 断开报告（及其反馈、复制计数里的报告引用）与用户的关联 */
 function unlink(data, report) {
   report.owner = ''
   report.inputHash = ''
   for (const f of feedbackOf(data, report.reportId)) f.owner = ''
+  const prefix = report.reportId + '#'
+  for (const u of data.usage) if (typeof u.ref === 'string' && u.ref.startsWith(prefix)) delete u.ref
+}
+
+/** 报告已不存在的反馈（上线前就被删掉的老报告）：断开与用户的关联。返回处理条数 */
+function unlinkOrphanFeedback(data) {
+  const ids = new Set(data.reports.map((r) => r.reportId))
+  let n = 0
+  for (const f of data.feedback) {
+    if (f.owner && !ids.has(f.reportId)) {
+      f.owner = ''
+      n++
+    }
+  }
+  return n
 }
 
 /**
@@ -72,6 +88,7 @@ function prune(data, now, cfg) {
     }
     return true
   })
+  unlinked += unlinkOrphanFeedback(data)
   data.usage = data.usage.filter((u) => u.createdAt > recordCut)
   data.jdCache = data.jdCache.filter((c) => c.createdAt > jdCut)
   return { removed, unlinked }
@@ -96,9 +113,6 @@ function deleteReport(data, reportId, owner, now) {
   report.deletedByUser = true
   report.deletedAt = now
   unlink(data, report)
-  // 复制计数里的报告引用也会把报告关联回用户
-  const prefix = reportId + '#'
-  for (const u of data.usage) if (typeof u.ref === 'string' && u.ref.startsWith(prefix)) delete u.ref
   return true
 }
 
