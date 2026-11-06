@@ -30,6 +30,7 @@ const { proposeRewrites } = require(S('rewrite'))
 const moderation = require(S('moderation'))
 const evalLib = require(path.join(ROOT, 'scripts', 'eval-lib'))
 const versions = require(S('versions'))
+const retention = require(S('retention'))
 
 let passed = 0
 let failed = 0
@@ -381,6 +382,75 @@ test('提示词版本：每个文件 8 位哈希，与文件内容一致', () =>
 test('版本标签', () => {
   assert.equal(versions.versionTag(null), '未记录')
   assert.equal(versions.versionTag({ judgeModel: 'qwen-plus', prompts: { 'jd-split.txt': 'aaaaaaaa', 'judge.txt': 'bbbbbbbb' } }), 'qwen-plus|jd-split@aaaaaaaa|judge@bbbbbbbb')
+})
+
+console.log('\n== 单测：数据留存 ==')
+const DAY = 86400e3
+const mkData = () => ({
+  reports: [
+    { reportId: 'rA', owner: 'u1', inputHash: 'h', createdAt: NOW - 40 * DAY, expiresAt: NOW - 10 * DAY, retained: false },
+    { reportId: 'rB', owner: 'u1', inputHash: 'h2', createdAt: NOW - 40 * DAY, expiresAt: NOW - 10 * DAY, retained: true,
+      spans: [{ id: 'S1', text: '简历行' }], judgments: [{ reqId: 'R1', verdict: 'hit', quote: '简历行', quoteId: 'S1', reason: '理由' }],
+      rewrites: [{ original: '简历行' }], rewritesStatus: 'done', requirements: [{ id: 'R1', text: '要求' }] },
+    { reportId: 'rC', owner: 'u1', inputHash: 'h3', createdAt: NOW - 1 * DAY, expiresAt: NOW + 29 * DAY, retained: true,
+      spans: [{ id: 'S1', text: '简历行' }], judgments: [{ reqId: 'R1', verdict: 'hit', quote: '简历行', quoteId: 'S1', reason: '理由' }],
+      rewrites: [{ original: '简历行' }], rewritesStatus: 'done', requirements: [{ id: 'R1', text: '要求' }] }
+  ],
+  feedback: [
+    { owner: 'u1', reportId: 'rB', q1: 'accurate', createdAt: NOW - 30 * DAY },
+    { owner: 'u1', reportId: 'rC', q1: 'inaccurate', comment: '我的手机 13812345678', createdAt: NOW - 200 * DAY },
+    { owner: 'u9', reportId: 'rGone', q1: 'partial', createdAt: NOW - 100 * DAY }
+  ],
+  usage: [{ kind: 'copy', owner: 'u1', ref: 'rC#0', createdAt: NOW }],
+  jdCache: []
+})
+const RCFG = { REPORT_TTL_DAYS: 30, RECORD_TTL_DAYS: 90, JD_CACHE_TTL_DAYS: 7 }
+
+test('迁移：补 retained / wrongItems / updatedAt，留言补脱敏，幂等', () => {
+  const d = mkData()
+  d.reports[1].retained = undefined
+  assert.ok(retention.migrate(d) > 0)
+  assert.equal(d.reports[1].retained, true)
+  assert.ok(d.feedback.every((f) => Array.isArray(f.wrongItems) && f.updatedAt))
+  assert.ok(d.feedback[1].comment.includes('[PHONE]'))
+  assert.equal(retention.migrate(d), 0)
+})
+test('清理：过期无反馈删除；过期有反馈保留并断开关联；反馈不清理', () => {
+  const d = mkData()
+  retention.prune(d, NOW, RCFG)
+  assert.deepEqual(d.reports.map((r) => r.reportId), ['rB', 'rC'])
+  const rB = d.reports[0]
+  assert.equal(rB.owner, '')
+  assert.equal(rB.inputHash, '')
+  assert.ok(rB.spans.length === 1) // 过期保留不删简历行
+  assert.equal(d.feedback.find((f) => f.reportId === 'rB').owner, '')
+  assert.equal(d.feedback.length, 3) // 含孤儿反馈 rGone
+})
+test('用户删除：无反馈的报告彻底删除', () => {
+  const d = mkData()
+  d.reports[2].retained = false
+  assert.ok(retention.deleteReport(d, 'rC', 'u1', NOW))
+  assert.ok(!d.reports.some((r) => r.reportId === 'rC'))
+})
+test('用户删除：有反馈的报告脱敏留存（逐字段）', () => {
+  const d = mkData()
+  assert.ok(retention.deleteReport(d, 'rC', 'u1', NOW))
+  const r = d.reports.find((x) => x.reportId === 'rC')
+  assert.equal(r.spans, undefined)
+  assert.deepEqual(r.rewrites, [])
+  assert.equal(r.judgments[0].quote, '')
+  assert.equal(r.judgments[0].quoteId, '')
+  assert.equal(r.judgments[0].reason, '理由')
+  assert.equal(r.requirements.length, 1)
+  assert.equal(r.owner, '')
+  assert.equal(r.deletedByUser, true)
+  assert.equal(d.feedback.find((f) => f.reportId === 'rC').owner, '')
+  assert.equal(d.usage[0].ref, undefined)
+})
+test('用户删除：不是自己的报告 → false，不改动', () => {
+  const d = mkData()
+  assert.equal(retention.deleteReport(d, 'rC', 'u2', NOW), false)
+  assert.equal(d.reports[2].owner, 'u1')
 })
 
 console.log('\n== 单测：检索 ==')

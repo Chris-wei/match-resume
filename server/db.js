@@ -9,6 +9,7 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const config = require('./config')
+const retention = require('./retention')
 
 const FILE = path.join(config.DATA_DIR, 'db.json')
 const SAVE_DEBOUNCE_MS = 200
@@ -106,10 +107,9 @@ function insertReport(doc) {
   save()
 }
 
-function removeReport(reportId, owner) {
-  const before = data.reports.length
-  data.reports = data.reports.filter((r) => !(r.reportId === reportId && r.owner === owner))
-  const removed = data.reports.length < before
+// 用户删除：无反馈的报告彻底删除；有反馈的报告脱敏留存（retention.deleteReport）
+function removeReport(reportId, owner, now = Date.now()) {
+  const removed = retention.deleteReport(data, reportId, owner, now)
   if (removed) save()
   return removed
 }
@@ -199,24 +199,18 @@ function setJdCache(key, requirements, now = Date.now()) {
   save()
 }
 
-// 过期清理：启动时 + 每天调用一次
+// 过期清理：启动时（migrate 之后）+ 每天调用一次。返回删除的报告数
 function prune(now) {
-  const reportCut = now - config.REPORT_TTL_DAYS * 86400e3
-  const recordCut = now - config.RECORD_TTL_DAYS * 86400e3
-  const jdCut = now - config.JD_CACHE_TTL_DAYS * 86400e3
-  const before = data.reports.length
-  const sizes = [data.usage.length, data.feedback.length, data.jdCache.length]
-  data.reports = data.reports.filter((r) => r.createdAt > reportCut && !(r.expiresAt < now))
-  data.usage = data.usage.filter((u) => u.createdAt > recordCut)
-  data.feedback = data.feedback.filter((f) => f.createdAt > recordCut)
-  data.jdCache = data.jdCache.filter((c) => c.createdAt > jdCut)
-  const changed =
-    data.reports.length !== before ||
-    data.usage.length !== sizes[0] ||
-    data.feedback.length !== sizes[1] ||
-    data.jdCache.length !== sizes[2]
-  if (changed) save()
-  return before - data.reports.length
+  const { removed, unlinked } = retention.prune(data, now, config)
+  if (removed || unlinked) save()
+  return removed
+}
+
+// 老数据补齐新字段：启动时必须在 prune 之前调用（否则有反馈的老报告会被当成无反馈删掉）
+function migrate() {
+  const n = retention.migrate(data)
+  if (n) save()
+  return n
 }
 
 module.exports = {
@@ -241,5 +235,6 @@ module.exports = {
   upsertFeedback,
   getJdCache,
   setJdCache,
-  prune
+  prune,
+  migrate
 }

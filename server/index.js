@@ -479,6 +479,9 @@ const server = http.createServer(async (req, res) => {
 
 // ---------------- 启动 ----------------
 // 清理过期数据 + 上次中途退出留下的半成品状态
+// 迁移必须先于清理：老数据里有反馈的报告还没打 retained 标记
+const migrated = db.migrate()
+if (migrated > 0) console.log(`启动迁移：补齐 ${migrated} 条记录`)
 const pruned = db.prune(Date.now())
 if (pruned > 0) console.log(`启动清理：删除 ${pruned} 份过期报告`)
 const released = db.releasePendingUsage()
