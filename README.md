@@ -69,7 +69,7 @@ node server/index.js
 ### 3. 跑内核测试（不需要任何账号）
 
 ```bash
-npm test    # 96 项断言：脱敏 / 引用定位 / 幻觉降级 / 打分确定性 / 一句话结论 / 风控 / 内容安全 / 身份与 IP / LLM 重试与时限 / 判定部分失败 / JD 缓存 / mock 全链路
+npm test    # 97 项断言：脱敏 / 引用定位 / 幻觉降级 / 打分确定性 / 一句话结论 / 风控 / 内容安全 / 身份与 IP / LLM 重试与时限 / 判定部分失败 / JD 缓存 / mock 全链路
 ```
 
 ### 4. 微信开发者工具
@@ -184,7 +184,7 @@ npm run eval:compare -- eval/runs/<基线>.json eval/runs/<新>.json
 │   ├── sensitive-words.txt / sensitive-allow.txt  # 敏感词库 / 白名单
 │   └── config.js              # 所有参数集中一处
 ├── examples/                  # 测试简历 + JD
-├── scripts/test-local.js      # 96 项内核测试
+├── scripts/test-local.js      # 97 项内核测试
 ├── scripts/eval*.js           # 评测：跑样本 / 对比两次结果
 ├── eval/cases/                # 20 份模拟评测样本（含标准答案）
 └── docs/design.md             # 设计文档（含云开发版的历史方案，可对照）

@@ -5,14 +5,21 @@ const config = require('./config')
 
 /**
  * 单条要求的命中度 0~1。
- * hit 且 JD 有年限要求：按 yearsHint/reqYears 比例打折；
+ * hit / partial 且 JD 有年限要求：按 yearsHint/reqYears 比例打折（partial 封顶在 partial 分）；
  * yearsHint 缺失时不惩罚（判 hit 说明证据明确，只是年限未知，标记 years_unverified）。
  */
 function hitScore(verdict, yearsHint, req) {
   const s = config.STATUS_SCORE
   if (verdict === 'miss') return { score: s.miss, flags: [] }
   if (verdict === 'unclear') return { score: s.unclear, flags: [] }
-  if (verdict === 'partial') return { score: s.partial, flags: [] }
+  if (verdict === 'partial') {
+    // 年限不足判 partial（判定提示词规定）：按实际/要求年限折算，且不超过 partial 分。
+    // 否则"1 年对 3 年"和"3 年对 5 年"得分一样
+    if (req.years && req.years > 0 && yearsHint != null) {
+      return { score: Math.min(s.partial, yearsHint / req.years), flags: [] }
+    }
+    return { score: s.partial, flags: [] }
+  }
   if (verdict === 'hit') {
     if (req.years && req.years > 0) {
       if (yearsHint == null) return { score: s.hit, flags: ['years_unverified'] }

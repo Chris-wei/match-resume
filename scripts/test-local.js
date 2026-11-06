@@ -184,6 +184,14 @@ test('年限不足按比例打折', () => {
   const item = s1.items.find((i) => i.req.id === 'R2')
   assert.ok(Math.abs(item.score - 0.6) < 1e-9)
 })
+test('年限不足判 partial 时也按比例折算（1/3 年低于 3/5 年）', () => {
+  const { hitScore } = require(S('score'))
+  const a = hitScore('partial', 1, { years: 3 }).score
+  const b = hitScore('partial', 3, { years: 5 }).score
+  assert.ok(Math.abs(a - 1 / 3) < 1e-9)
+  assert.equal(b, config.STATUS_SCORE.partial)
+  assert.equal(hitScore('partial', null, { years: 3 }).score, config.STATUS_SCORE.partial)
+})
 test('雷达五维齐全', () => assert.equal(s1.radar.length, 5) && assert.ok(s1.radar.every((r) => typeof r.value === 'number')))
 const s3 = scoreMatch(
   [mkReq('R1', 'experience', 1, 5), mkReq('R2', 'skills', 1), mkReq('R3', 'skills', 1), mkReq('R4', 'skills', 1)],
