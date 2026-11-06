@@ -45,6 +45,9 @@ module.exports = {
   // 只有部署在反向代理（nginx 等）后面时才信任 X-Real-IP / X-Forwarded-For，
   // 否则这两个头可被客户端随意伪造，IP 限制形同虚设
   TRUST_PROXY: process.env.TRUST_PROXY === '1',
+  // 网页后台（/admin）管理员密码；不设置则后台完全关闭
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || '',
+  ADMIN_SESSION_HOURS: 12,
 
   // ---- 风控（设计文档 §6：个人 MVP 够用即可）----
   // 每个身份（openid 或设备 ID）每天可分析次数

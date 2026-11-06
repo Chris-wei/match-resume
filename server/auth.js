@@ -125,4 +125,4 @@ function bearerToken(req) {
   return h.startsWith('Bearer ') ? h.slice(7) : ''
 }
 
-module.exports = { issueToken, verifyToken, identityFor, ipHashOf, clientIp, bearerToken, DEVICE_ID_RE }
+module.exports = { secretKey, issueToken, verifyToken, identityFor, ipHashOf, clientIp, bearerToken, DEVICE_ID_RE }

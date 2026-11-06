@@ -524,6 +524,12 @@ test('后台汇总', () => {
   assert.deepEqual(s.q1, { accurate: 1, partial: 1, inaccurate: 1, none: 0 })
 })
 
+console.log('\n== 单测：后台页面 ==')
+test('后台页面不用 innerHTML 渲染（防留言注入）', () => {
+  const html = fs.readFileSync(S('admin.html'), 'utf8')
+  assert.ok(!/innerHTML\s*=|insertAdjacentHTML|document\.write/.test(html))
+})
+
 console.log('\n== 单测：检索 ==')
 const reqForRetrieval = { id: 'R1', text: '精通 Kubernetes 容器编排', skill: 'kubernetes' }
 test('别名命中排第一', () => {

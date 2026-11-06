@@ -27,6 +27,7 @@ const { redact, redactSpans } = require('./redact')
 const { segmentResume } = require('./segment')
 const moderation = require('./moderation')
 const { promptVersions } = require('./versions')
+const admin = require('./admin')
 const { normalize } = require('./text')
 const { extractFromBuffer } = require('./pdfExtract')
 
@@ -452,6 +453,9 @@ const server = http.createServer(async (req, res) => {
   console.log(`${new Date().toISOString()} ${routeKey}`)
 
   try {
+    // 网页后台：独立的鉴权（cookie），不走小程序 token
+    if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return await admin.handle(req, res, url)
+
     let handler = routes[routeKey]
     let params = {}
     if (!handler) {

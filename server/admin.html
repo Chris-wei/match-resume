@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>简历分析后台</title>
+<style>
+  :root {
+    --bg: #f4f5f9; --card: #fff; --text: #1f2430; --text-2: #4b5363; --text-3: #8a91a0; --line: #e5e7ee;
+    --hit: #15803d; --partial: #b45309; --miss: #b91c1c; --unclear: #6b7280; --accent: #4f46e5; --warn-bg: #fff4e5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header { background: var(--card); border-bottom: 1px solid var(--line); padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 16px; margin: 0; flex: 1; }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 60px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; }
+  .muted { color: var(--text-3); }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; min-width: 120px; }
+  .stat b { display: block; font-size: 20px; }
+  .filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
+  select, input[type=password], button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; background: var(--card); }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--text-2); background: #fafbfd; position: sticky; top: 0; }
+  tr.row { cursor: pointer; }
+  tr.row:hover td { background: #f7f8ff; }
+  .tag { display: inline-block; padding: 0 8px; border-radius: 10px; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
+  .v-hit { color: var(--hit); } .v-partial { color: var(--partial); } .v-miss { color: var(--miss); } .v-unclear { color: var(--unclear); }
+  .q-accurate { color: var(--hit); } .q-partial { color: var(--partial); } .q-inaccurate { color: var(--miss); } .q-none { color: var(--text-3); }
+  .wrong td { background: #fff1f1; }
+  .clip { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pre { white-space: pre-wrap; word-break: break-word; }
+  .flags { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text-3); }
+  .kv { display: grid; grid-template-columns: 160px 1fr; gap: 4px 16px; }
+  .kv dt { color: var(--text-3); } .kv dd { margin: 0; word-break: break-all; }
+  .banner { background: var(--warn-bg); border: 1px solid #f5d6a8; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
+  .spans li { padding: 2px 6px; border-radius: 4px; }
+  .spans li.cited { background: #eef2ff; }
+  .spans li.focus { outline: 2px solid var(--accent); }
+  .spans code { color: var(--text-3); margin-right: 8px; }
+  a.quote { color: var(--accent); cursor: pointer; text-decoration: underline; }
+  .pager { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+  .login { max-width: 360px; margin: 120px auto; }
+  .login form { display: flex; gap: 8px; }
+  .login input { flex: 1; }
+  .error { color: var(--miss); margin-top: 8px; min-height: 1.6em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>简历分析后台</h1>
+  <button id="logout" hidden>退出登录</button>
+</header>
+<main id="app"></main>
+<script>
+'use strict'
+// 所有数据一律用 textContent / createElement 渲染（不用 innerHTML），用户留言里的 HTML 只会显示成文字。
+
+const Q1_TEXT = { accurate: '准', partial: '部分准', inaccurate: '不准', none: '未填' }
+const Q2_TEXT = { problems: '逐条判定', rewrites: '改写建议', none: '都一般', '': '-' }
+const STATUS_TEXT = { ok: '正常', expired: '已过期', deleted: '用户已删除', missing: '报告已不存在' }
+const VERDICT_TEXT = { hit: '满足', partial: '部分', miss: '缺失', unclear: '待核对' }
+const CATEGORY_TEXT = { skills: '技能', experience: '经验', projects: '项目', education: '学历', keywords: '加分项' }
+
+const app = document.getElementById('app')
+const logoutBtn = document.getElementById('logout')
+
+/** el('td', { class: 'x', onclick: fn }, '文字', childNode, ...) —— 字符串一律作为文本节点 */
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag)
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue
+    if (k.startsWith('on')) node.addEventListener(k.slice(2), v)
+    else if (k === 'class') node.className = v
+    else node.setAttribute(k, v === true ? '' : String(v))
+  }
+  for (const c of children.flat()) {
+    if (c == null || c === false) continue
+    node.appendChild(c instanceof Node ? c : document.createTextNode(String(c)))
+  }
+  return node
+}
+
+function show(...nodes) {
+  app.replaceChildren(...nodes)
+}
+
+const fmtTime = (t) => (t ? new Date(t).toLocaleString('zh-CN', { hour12: false }) : '-')
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { credentials: 'same-origin', ...opts })
+  if (res.status === 401) {
+    renderLogin()
+    throw new Error('UNAUTHORIZED')
+  }
+  return res.json()
+}
+
+// ---------------- 登录 ----------------
+function renderLogin(message) {
+  logoutBtn.hidden = true
+  const input = el('input', { type: 'password', placeholder: '管理员密码', autocomplete: 'current-password' })
+  const err = el('div', { class: 'error' }, message || '')
+  const form = el('form', {
+    onsubmit: async (e) => {
+      e.preventDefault()
+      const r = await fetch('/admin/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: input.value })
+      }).then((x) => x.json())
+      if (r.ok) route()
+      else err.textContent = r.message || '登录失败'
+    }
+  }, input, el('button', { class: 'primary', type: 'submit' }, '登录'))
+  show(el('div', { class: 'card login' }, el('h2', {}, '登录后台'), form, err))
+  input.focus()
+}
+
+logoutBtn.addEventListener('click', async () => {
+  await fetch('/admin/api/logout', { method: 'POST' })
+  renderLogin()
+})
+
+// ---------------- 反馈列表 ----------------
+const filters = { q1: 'all', hasWrong: false, hasComment: false, version: '', page: 1 }
+
+function select(options, value, onchange) {
+  const s = el('select', { onchange: (e) => onchange(e.target.value) }, options.map(([v, label]) => el('option', { value: v, selected: v === value }, label)))
+  return s
+}
+
+function checkbox(label, checked, onchange) {
+  return el('label', {}, el('input', { type: 'checkbox', checked, onchange: (e) => onchange(e.target.checked) }), ' ', label)
+}
+
+async function renderList() {
+  logoutBtn.hidden = false
+  const qs = new URLSearchParams({
+    q1: filters.q1,
+    hasWrong: filters.hasWrong ? '1' : '',
+    hasComment: filters.hasComment ? '1' : '',
+    version: filters.version,
+    page: String(filters.page)
+  })
+  const [sum, list] = await Promise.all([api('/admin/api/summary'), api('/admin/api/feedback?' + qs)])
+  const pct = (n) => (sum.total ? Math.round((n / sum.total) * 100) + '%' : '-')
+  const stats = el('div', { class: 'stats' },
+    el('div', { class: 'stat' }, el('b', {}, sum.total), '反馈总数'),
+    el('div', { class: 'stat' }, el('b', {}, sum.last7d), '近 7 天'),
+    el('div', { class: 'stat q-accurate' }, el('b', {}, pct(sum.q1.accurate)), '准'),
+    el('div', { class: 'stat q-partial' }, el('b', {}, pct(sum.q1.partial)), '部分准'),
+    el('div', { class: 'stat q-inaccurate' }, el('b', {}, pct(sum.q1.inaccurate)), '不准'),
+    el('div', { class: 'stat' }, el('b', {}, sum.wrongItems), '被标记判错的条目')
+  )
+  const reload = (patch) => {
+    Object.assign(filters, patch, patch.page ? {} : { page: 1 })
+    renderList()
+  }
+  const bar = el('div', { class: 'filters' },
+    '准不准', select([['all', '全部'], ['accurate', '准'], ['partial', '部分准'], ['inaccurate', '不准'], ['none', '未填']], filters.q1, (v) => reload({ q1: v })),
+    checkbox('只看有判错标记', filters.hasWrong, (v) => reload({ hasWrong: v })),
+    checkbox('只看有留言', filters.hasComment, (v) => reload({ hasComment: v })),
+    '版本', select([['', '全部版本']].concat(list.versions.map((v) => [v, v])), filters.version, (v) => reload({ version: v }))
+  )
+  const rows = list.rows.map((r) =>
+    el('tr', { class: 'row', onclick: () => (location.hash = '#/report/' + encodeURIComponent(r.reportId)) },
+      el('td', {}, fmtTime(r.updatedAt)),
+      el('td', {}, el('span', { class: 'tag q-' + r.q1 }, Q1_TEXT[r.q1])),
+      el('td', {}, Q2_TEXT[r.q2] || r.q2),
+      el('td', {}, r.wrongCount ? String(r.wrongCount) : '-'),
+      el('td', { class: 'clip', title: r.comment }, r.comment || '-'),
+      el('td', {}, r.score == null ? '-' : String(r.score)),
+      el('td', { class: 'clip', title: r.conclusion || '' }, r.conclusion || '-'),
+      el('td', {}, STATUS_TEXT[r.status]),
+      el('td', { class: 'flags' }, r.version)
+    )
+  )
+  const table = el('table', {},
+    el('thead', {}, el('tr', {}, ['时间', '准不准', '最有用', '判错条数', '留言', '总分', '一句话结论', '报告状态', '版本'].map((h) => el('th', {}, h)))),
+    el('tbody', {}, rows.length ? rows : el('tr', {}, el('td', { colspan: 9, class: 'muted' }, '没有符合条件的反馈')))
+  )
+  const pages = Math.max(1, Math.ceil(list.total / list.pageSize))
+  const pager = el('div', { class: 'pager' },
+    el('button', { disabled: list.page <= 1, onclick: () => reload({ page: list.page - 1 }) }, '上一页'),
+    el('span', { class: 'muted' }, `第 ${list.page} / ${pages} 页，共 ${list.total} 条`),
+    el('button', { disabled: list.page >= pages, onclick: () => reload({ page: list.page + 1 }) }, '下一页')
+  )
+  show(stats, bar, table, pager)
+}
+
+// ---------------- 报告详情 ----------------
+async function renderDetail(reportId) {
+  logoutBtn.hidden = false
+  const d = await api('/admin/api/report/' + encodeURIComponent(reportId))
+  const back = el('p', {}, el('a', { href: '#/', class: 'quote' }, '‹ 返回反馈列表'))
+  if (!d.ok) return show(back, el('div', { class: 'card' }, d.message || '报告不存在'))
+
+  const fb = d.feedback
+  const r = d.report
+  const wrong = new Set(fb ? (fb.wrongItems || []).map((w) => w.reqId) : [])
+  const parts = [back]
+
+  if (d.status === 'deleted') parts.push(el('div', { class: 'banner' }, '用户已删除这份报告，简历内容已清除，仅保留判定与反馈。'))
+  if (d.status === 'missing') parts.push(el('div', { class: 'banner' }, '报告已不存在（上线前已过期删除），仅剩反馈。'))
+  if (d.status === 'expired') parts.push(el('div', { class: 'banner' }, '报告已过期（用户侧不可见），因有反馈而保留。'))
+
+  // 反馈（置顶）
+  parts.push(el('div', { class: 'card' }, el('h2', {}, '用户反馈'),
+    fb
+      ? el('dl', { class: 'kv' },
+          el('dt', {}, '准不准'), el('dd', {}, el('span', { class: 'tag q-' + (fb.q1 || 'none') }, Q1_TEXT[fb.q1 || 'none'] || fb.q1)),
+          el('dt', {}, '最有用'), el('dd', {}, Q2_TEXT[fb.q2 || ''] || fb.q2),
+          el('dt', {}, '留言'), el('dd', { class: 'pre' }, fb.comment || '-'),
+          el('dt', {}, '标记判错'), el('dd', {}, wrong.size ? [...wrong].join('、') : '-'),
+          el('dt', {}, '提交 / 更新'), el('dd', {}, fmtTime(fb.createdAt) + ' / ' + fmtTime(fb.updatedAt)))
+      : el('p', { class: 'muted' }, '无')))
+
+  if (!r) return show(...parts)
+
+  // 总分与雷达
+  const radar = (r.score && r.score.radar) || []
+  parts.push(el('div', { class: 'card' }, el('h2', {}, '总分 ' + (r.score ? r.score.overall : '-') + (r.score && r.score.capped ? '（触发硬门槛封顶）' : '')),
+    el('p', {}, r.conclusion || ''),
+    el('table', {},
+      el('thead', {}, el('tr', {}, radar.map((x) => el('th', {}, (CATEGORY_TEXT[x.category] || x.category) + `（${x.count} 条）`)))),
+      el('tbody', {}, el('tr', {}, radar.map((x) => el('td', {}, String(x.value))))))))
+
+  // 逐条判定
+  const reqById = Object.fromEntries((r.requirements || []).map((q) => [q.id, q]))
+  const jrows = (r.judgments || []).map((j) => {
+    const q = reqById[j.reqId] || {}
+    return el('tr', { class: wrong.has(j.reqId) ? 'wrong' : '' },
+      el('td', {}, j.reqId),
+      el('td', {}, q.text || ''),
+      el('td', { class: 'muted pre' }, q.jdQuote || ''),
+      el('td', {}, [CATEGORY_TEXT[q.category] || q.category, '权重 ' + q.weight, q.years ? q.years + ' 年' : ''].filter(Boolean).join(' / ')),
+      el('td', {}, el('span', { class: 'tag v-' + j.verdict }, VERDICT_TEXT[j.verdict] || j.verdict), j.yearsHint != null ? ` ${j.yearsHint} 年` : ''),
+      el('td', { class: 'pre' }, j.reason || ''),
+      el('td', { class: 'pre' }, j.quote ? el('a', { class: 'quote', onclick: () => focusSpan(j.quoteId) }, j.quoteId + '：' + j.quote) : '-'),
+      el('td', { class: 'flags' }, (j.flags || []).join(' ') || '-'),
+      el('td', {}, wrong.has(j.reqId) ? '✗ 用户标记判错' : '')
+    )
+  })
+  parts.push(el('div', { class: 'card' }, el('h2', {}, '逐条判定（红底 = 用户标记判错）'),
+    el('table', {},
+      el('thead', {}, el('tr', {}, ['ID', '要求', 'JD 引用', '类别 / 权重 / 年限', '判定', '理由', '简历引用', 'flags', '用户反馈'].map((h) => el('th', {}, h)))),
+      el('tbody', {}, jrows))))
+
+  // 诊断元数据
+  const meta = r.meta || {}
+  parts.push(el('div', { class: 'card' }, el('h2', {}, '诊断信息'),
+    el('dl', { class: 'kv' },
+      el('dt', {}, '报告 ID'), el('dd', {}, r.reportId),
+      el('dt', {}, '版本'), el('dd', { class: 'flags' }, r.versionTag),
+      el('dt', {}, '拆解模型'), el('dd', {}, meta.model || '未记录'),
+      el('dt', {}, '判定模型'), el('dd', {}, meta.judgeModel || '未记录'),
+      el('dt', {}, '提示词'), el('dd', { class: 'flags' }, meta.prompts ? Object.entries(meta.prompts).map(([k, v]) => k + '@' + v).join('  ') : '未记录'),
+      el('dt', {}, 'mock'), el('dd', {}, String(!!(meta.mock || r.mock))),
+      el('dt', {}, 'JD 拆解命中缓存'), el('dd', {}, String(!!r.jdCacheHit)),
+      el('dt', {}, '拆解被拒条数'), el('dd', {}, String(r.rejectionCount ?? '-')),
+      el('dt', {}, '判定失败条数'), el('dd', {}, String(r.judgeFailedCount ?? '-')),
+      el('dt', {}, '简历片段数'), el('dd', {}, String(r.spanCount ?? '-')),
+      el('dt', {}, '耗时'), el('dd', {}, r.durationMs != null ? (r.durationMs / 1000).toFixed(1) + ' s' : '-'),
+      el('dt', {}, '创建时间'), el('dd', {}, fmtTime(r.createdAt)),
+      el('dt', {}, '过期时间'), el('dd', {}, fmtTime(r.expiresAt)),
+      r.deletedAt ? [el('dt', {}, '用户删除时间'), el('dd', {}, fmtTime(r.deletedAt))] : null)))
+
+  // 简历
+  const cited = new Set((r.judgments || []).map((j) => j.quoteId).filter(Boolean))
+  parts.push(el('div', { class: 'card' }, el('h2', {}, '简历（脱敏后）'),
+    Array.isArray(r.spans)
+      ? el('ol', { class: 'spans', style: 'list-style:none;padding:0;margin:0' }, r.spans.map((s) =>
+          el('li', { id: 'span-' + s.id, class: cited.has(s.id) ? 'cited' : '' }, el('code', {}, s.id), s.text)))
+      : el('p', { class: 'muted' }, '简历内容已清除')))
+
+  // 改写建议
+  const rw = r.rewrites || []
+  parts.push(el('div', { class: 'card' }, el('h2', {}, '改写建议（' + (r.rewritesStatus || '-') + '）'),
+    rw.length
+      ? el('table', {},
+          el('thead', {}, el('tr', {}, ['要求', '类型', '原句', '改写', '说明'].map((h) => el('th', {}, h)))),
+          el('tbody', {}, rw.map((x) => el('tr', {}, el('td', {}, x.reqId), el('td', {}, x.type), el('td', { class: 'pre' }, x.original || '-'), el('td', { class: 'pre' }, x.rewrite || ''), el('td', { class: 'pre' }, x.note || '')))))
+      : el('p', { class: 'muted' }, '无')))
+
+  show(...parts)
+  window.scrollTo(0, 0)
+}
+
+function focusSpan(id) {
+  const node = document.getElementById('span-' + id)
+  if (!node) return
+  document.querySelectorAll('.spans li.focus').forEach((x) => x.classList.remove('focus'))
+  node.classList.add('focus')
+  node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+// ---------------- 路由 ----------------
+function route() {
+  const m = location.hash.match(/^#\/report\/(.+)$/)
+  const p = m ? renderDetail(decodeURIComponent(m[1])) : renderList()
+  p.catch((e) => {
+    if (e.message !== 'UNAUTHORIZED') show(el('div', { class: 'card error' }, '加载失败：' + e.message))
+  })
+}
+window.addEventListener('hashchange', route)
+route()
+</script>
+</body>
+</html>
