@@ -29,6 +29,7 @@ const { runPipeline } = require(S('core'))
 const { proposeRewrites } = require(S('rewrite'))
 const moderation = require(S('moderation'))
 const evalLib = require(path.join(ROOT, 'scripts', 'eval-lib'))
+const versions = require(S('versions'))
 
 let passed = 0
 let failed = 0
@@ -368,6 +369,18 @@ test('gradeRun：判对 / 判错 / 漏拆 / 多拆 / 总分区间', () => {
   assert.equal(s.accuracyMatched, 50)
   assert.equal(s.accuracyOverall, 33.3)
   assert.equal(s.confusion.miss['未拆出'], 1)
+})
+
+console.log('\n== 单测：版本 ==')
+test('提示词版本：每个文件 8 位哈希，与文件内容一致', () => {
+  const v = versions.promptVersions()
+  assert.deepEqual(Object.keys(v), ['jd-split.txt', 'judge.txt', 'rewrite.txt'])
+  const expect = require('crypto').createHash('sha256').update(fs.readFileSync(S('prompts/judge.txt'))).digest('hex').slice(0, 8)
+  assert.equal(v['judge.txt'], expect)
+})
+test('版本标签', () => {
+  assert.equal(versions.versionTag(null), '未记录')
+  assert.equal(versions.versionTag({ judgeModel: 'qwen-plus', prompts: { 'jd-split.txt': 'aaaaaaaa', 'judge.txt': 'bbbbbbbb' } }), 'qwen-plus|jd-split@aaaaaaaa|judge@bbbbbbbb')
 })
 
 console.log('\n== 单测：检索 ==')

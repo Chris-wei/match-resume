@@ -26,6 +26,7 @@ const { proposeRewrites } = require('./rewrite')
 const { redact, redactSpans } = require('./redact')
 const { segmentResume } = require('./segment')
 const moderation = require('./moderation')
+const { promptVersions } = require('./versions')
 const { normalize } = require('./text')
 const { extractFromBuffer } = require('./pdfExtract')
 
@@ -77,7 +78,7 @@ function auth(req) {
 
 function reportView(doc) {
   // 免费版：全部内容直接下发（裁剪点收口在服务端，将来分层只改这里）
-  const { owner, inputHash, wxChecked, ...view } = doc
+  const { owner, inputHash, wxChecked, meta, retained, ...view } = doc
   return view
 }
 
@@ -114,6 +115,8 @@ const promptHash = (...names) =>
   db.sha256(names.map((n) => fs.readFileSync(path.join(__dirname, 'prompts', n), 'utf8')).join('\u0000')).slice(0, 12)
 const SPLIT_PROMPT_TAG = promptHash('jd-split.txt')
 const ALL_PROMPTS_TAG = promptHash('jd-split.txt', 'judge.txt', 'rewrite.txt')
+// 写进每份报告的提示词版本（与评测结果文件同一算法，后台可直接对照）
+const PROMPT_VERSIONS = promptVersions()
 
 // 报告缓存键：主模型 + 判定模型 + 全部提示词版本，任一变化都重新分析，不复用旧报告
 const modelTag = () =>
@@ -168,6 +171,15 @@ async function runAnalyzeJob(job, { resume, jd, owner, usageId, inputHash, wxChe
     mock: config.LLM_MOCK,
     // 输入是否经过微信内容安全检查（复用报告时据此决定要不要补查）
     wxChecked: !!wxChecked,
+    // 生成时的模型与提示词版本（后台按版本看反馈）
+    meta: {
+      model: config.LLM_MOCK ? 'mock' : config.LLM_MODEL,
+      judgeModel: config.LLM_MOCK ? 'mock' : judgeModel(),
+      prompts: PROMPT_VERSIONS,
+      mock: config.LLM_MOCK
+    },
+    // 有反馈后置 true：长期保留（见 retention.js）
+    retained: false,
     score: pipeline.score,
     conclusion: pipeline.conclusion,
     requirements: pipeline.requirements,

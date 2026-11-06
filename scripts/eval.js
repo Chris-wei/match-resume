@@ -11,10 +11,10 @@
 
 const fs = require('fs')
 const path = require('path')
-const crypto = require('crypto')
 const config = require('../server/config')
 const { runPipeline } = require('../server/core')
 const { judgeModel } = require('../server/judge')
+const { promptVersions } = require('../server/versions')
 const { loadCases, gradeRun, summarize, METRICS, padW } = require('./eval-lib')
 
 const ROOT = path.join(__dirname, '..')
@@ -37,16 +37,6 @@ function parseArgs(argv) {
     } else throw new Error(`未知参数：${a}`)
   }
   return args
-}
-
-/** 提示词版本：每个提示词文件内容的短哈希，对比时一眼看出改了哪个。 */
-function promptVersions() {
-  const dir = path.join(ROOT, 'server', 'prompts')
-  const out = {}
-  for (const f of fs.readdirSync(dir).sort()) {
-    out[f] = crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, f))).digest('hex').slice(0, 8)
-  }
-  return out
 }
 
 async function pool(tasks, n) {
