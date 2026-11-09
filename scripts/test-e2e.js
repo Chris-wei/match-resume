@@ -66,6 +66,8 @@ async function startServer(extraEnv, opts = {}) {
     PORT: String(port),
     DATA_DIR: dataDir,
     LLM_MOCK: '1',
+    // 不读本机 .env：开发者本地配的 ADMIN_USERNAME / WX_* 等不能渗进测试
+    ENV_FILE: os.devNull,
     WX_APPID: '',
     WX_APPSECRET: '',
     ADMIN_PASSWORD: '',

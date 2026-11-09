@@ -4,6 +4,7 @@
 // 运行：npm test  或  node scripts/test-local.js
 
 process.env.LLM_MOCK = '1' // 必须在 require 之前设置
+process.env.ENV_FILE = require('os').devNull // 不读本机 .env：本地配的微信密钥等不能让测试去调真实接口
 
 const fs = require('fs')
 const path = require('path')

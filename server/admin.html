@@ -5,58 +5,186 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>简历分析后台</title>
 <style>
-  :root {
-    --bg: #f4f5f9; --card: #fff; --text: #1f2430; --text-2: #4b5363; --text-3: #8a91a0; --line: #e5e7ee;
-    --hit: #15803d; --partial: #b45309; --miss: #b91c1c; --unclear: #6b7280; --accent: #4f46e5; --warn-bg: #fff4e5;
+  :root { color-scheme: light dark;
+    --bg: #f5f6fa; --card: #ffffff; --card-2: #f9fafc; --text: #161a23; --text-2: #4a5263; --text-3: #8b93a3;
+    --line: #e6e8ef; --line-2: #eef0f5;
+    --accent: #4f46e5; --accent-2: #4338ca; --accent-soft: #eef0ff;
+    --hit: #15803d; --hit-soft: #e9f7ee; --partial: #b45309; --partial-soft: #fdf3e5;
+    --miss: #c0262d; --miss-soft: #fdeced; --unclear: #6b7280; --unclear-soft: #f1f2f4;
+    --warn-bg: #fff7eb; --warn-line: #f6dcb3;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 1px 3px rgba(16, 24, 40, .06);
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1117; --card: #171a22; --card-2: #1c2029; --text: #e7e9ee; --text-2: #b4bac6; --text-3: #7d8594;
+      --line: #2a2f3a; --line-2: #222631;
+      --accent: #818cf8; --accent-2: #a5b4fc; --accent-soft: #23264a;
+      --hit: #4ade80; --hit-soft: #15301f; --partial: #fbbf24; --partial-soft: #352914;
+      --miss: #f87171; --miss-soft: #3a1b1d; --unclear: #9ca3af; --unclear-soft: #252932;
+      --warn-bg: #2e2514; --warn-line: #4a3b1c;
+      --shadow: none;
+    }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
-  header { background: var(--card); border-bottom: 1px solid var(--line); padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
-  header h1 { font-size: 16px; margin: 0; flex: 1; }
-  main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 60px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
-  .card h2 { font-size: 15px; margin: 0 0 12px; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; -webkit-font-smoothing: antialiased; }
+
+  /* 顶栏 */
+  header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--card) 88%, transparent); backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--line); }
+  .topbar { max-width: 1280px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; flex: 1; font-weight: 600; font-size: 15px; }
+  .logo { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; display: grid; place-items: center; font-size: 14px; font-weight: 700; }
+  .brand small { font-weight: 400; color: var(--text-3); font-size: 12px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 24px 64px; }
+
+  /* 页面标题 */
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+  .page-head h1 { font-size: 20px; margin: 0; letter-spacing: .2px; }
+  .page-head p { margin: 2px 0 0; color: var(--text-3); font-size: 13px; }
+
+  /* 卡片 */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .card-head h2 { margin: 0; }
+  .card.flush { padding: 0; overflow: hidden; }
+  .card.flush .card-head { padding: 16px 20px 0; }
+  .card.flush .card-foot { padding: 12px 20px; border-top: 1px solid var(--line-2); }
+  .count { font-size: 12px; font-weight: 500; color: var(--text-3); background: var(--card-2); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; }
   .muted { color: var(--text-3); }
-  .stats { display: flex; gap: 12px; flex-wrap: wrap; }
-  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; min-width: 120px; }
-  .stat b { display: block; font-size: 20px; }
-  .filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
-  select, input[type=text], input[type=password], button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
-  button { cursor: pointer; }
+  .hint { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin: 0 0 14px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; align-items: start; }
+  .grid-2 > .card { margin-bottom: 0; }
+
+  /* 统计卡 */
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)) minmax(280px, 2fr); gap: 12px; margin-bottom: 16px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; }
+  .stat .label { color: var(--text-3); font-size: 12.5px; }
+  .stat .value { font-size: 26px; font-weight: 650; line-height: 1.3; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .dist { height: 10px; border-radius: 999px; background: var(--line-2); display: flex; overflow: hidden; margin: 10px 0 8px; }
+  .dist span { display: block; height: 100%; }
+  .dist .d-accurate { background: var(--hit); } .dist .d-partial { background: var(--partial); } .dist .d-inaccurate { background: var(--miss); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-2); }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+  .legend b { font-variant-numeric: tabular-nums; margin-left: 4px; }
+
+  /* 表单控件 */
+  select, input[type=text], input[type=password], button {
+    font: inherit; color: var(--text); padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+    transition: border-color .15s, box-shadow .15s, background .15s;
+  }
+  select:focus, input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; vertical-align: -2px; margin: 0 6px 0 0; }
+  button { cursor: pointer; font-weight: 500; }
+  button:hover:not(:disabled) { background: var(--card-2); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
   button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-  table { width: 100%; border-collapse: collapse; background: var(--card); }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-weight: 600; color: var(--text-2); background: #fafbfd; position: sticky; top: 0; }
-  tr.row { cursor: pointer; }
-  tr.row:hover td { background: #f7f8ff; }
-  .tag { display: inline-block; padding: 0 8px; border-radius: 10px; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
-  .v-hit { color: var(--hit); } .v-partial { color: var(--partial); } .v-miss { color: var(--miss); } .v-unclear { color: var(--unclear); }
-  .q-accurate { color: var(--hit); } .q-partial { color: var(--partial); } .q-inaccurate { color: var(--miss); } .q-none { color: var(--text-3); }
-  .wrong td { background: #fff1f1; }
-  .clip { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button.primary:hover:not(:disabled) { background: var(--accent-2); border-color: var(--accent-2); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+  button.ghost:hover { background: var(--card-2); }
+  .filters { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; }
+  .field { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 13px; }
+  .field select { max-width: 220px; text-overflow: ellipsis; }
+  .check { display: inline-flex; align-items: center; color: var(--text-2); font-size: 13px; cursor: pointer; user-select: none; }
+
+  /* 表格 */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+  th { font-weight: 500; font-size: 12.5px; color: var(--text-3); background: var(--card-2); white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tr.row { cursor: pointer; transition: background .12s; }
+  tr.row:hover td { background: var(--accent-soft); }
+  td.num { font-variant-numeric: tabular-nums; }
+  td.time { white-space: nowrap; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .empty { text-align: center; color: var(--text-3); padding: 36px 12px; }
+  .wrong td { background: var(--miss-soft); }
+  .clip { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nowrap { white-space: nowrap; }
+  td.flags.clip { max-width: 180px; }
   .pre { white-space: pre-wrap; word-break: break-word; }
-  .flags { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text-3); }
-  .kv { display: grid; grid-template-columns: 160px 1fr; gap: 4px 16px; }
+  .flags { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--text-3); }
+
+  /* 标签 */
+  .tag { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; background: var(--unclear-soft); color: var(--unclear); }
+  .v-hit, .q-accurate { color: var(--hit); } .v-partial, .q-partial { color: var(--partial); } .v-miss, .q-inaccurate { color: var(--miss); } .v-unclear { color: var(--unclear); } .q-none { color: var(--text-3); }
+  .tag.v-hit, .tag.q-accurate { background: var(--hit-soft); } .tag.v-partial, .tag.q-partial { background: var(--partial-soft); }
+  .tag.v-miss, .tag.q-inaccurate { background: var(--miss-soft); } .tag.v-unclear, .tag.q-none { background: var(--unclear-soft); }
+  .status-ok { color: var(--hit); } .status-expired, .status-missing { color: var(--text-3); } .status-deleted { color: var(--partial); }
+
+  /* 白名单 */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .chip button { border: 0; background: transparent; color: var(--text-3); padding: 0 6px; line-height: 20px; border-radius: 999px; font-size: 14px; }
+  .chip button:hover { color: var(--miss); background: var(--miss-soft); }
+  .empty-box { border: 1px dashed var(--line); border-radius: 10px; padding: 14px; color: var(--text-3); font-size: 13px; margin-bottom: 12px; text-align: center; }
+  .inline-form { display: flex; gap: 8px; }
+  .inline-form input { flex: 1; min-width: 0; }
+
+  /* 运行参数 */
+  .setting { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line-2); flex-wrap: wrap; }
+  .setting .s-label { flex: 1; min-width: 160px; }
+  .setting .s-label div { font-weight: 500; }
+  .setting .s-label small { color: var(--text-3); font-size: 12px; }
+  .setting input { width: 84px; text-align: center; font-variant-numeric: tabular-nums; }
+
+  /* 分页 */
+  .pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+
+  /* 详情页 */
+  .back { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); text-decoration: none; font-size: 13px; padding: 4px 10px 4px 6px; border-radius: 8px; margin-bottom: 12px; }
+  .back:hover { background: var(--card); color: var(--accent); }
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 8px 16px; margin: 0; }
   .kv dt { color: var(--text-3); } .kv dd { margin: 0; word-break: break-all; }
-  .banner { background: var(--warn-bg); border: 1px solid #f5d6a8; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
-  .spans li { padding: 2px 6px; border-radius: 4px; }
-  .spans li.cited { background: #eef2ff; }
+  .banner { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; color: var(--text-2); }
+  .score { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .score .big { font-size: 34px; font-weight: 700; color: var(--accent); line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .radar { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 14px; }
+  .radar > div { background: var(--card-2); border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; }
+  .radar small { color: var(--text-3); display: block; font-size: 12px; }
+  .radar b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .bar { height: 4px; background: var(--line-2); border-radius: 999px; margin-top: 6px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--accent); }
+  .spans { list-style: none; padding: 0; margin: 0; }
+  .spans li { padding: 4px 8px; border-radius: 6px; }
+  .spans li.cited { background: var(--accent-soft); }
   .spans li.focus { outline: 2px solid var(--accent); }
-  .spans code { color: var(--text-3); margin-right: 8px; }
-  a.quote { color: var(--accent); cursor: pointer; text-decoration: underline; }
-  .pager { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
-  .login { max-width: 360px; margin: 120px auto; }
-  .login form { display: flex; flex-direction: column; gap: 8px; }
-  .login button { margin-top: 4px; }
-  .error { color: var(--miss); margin-top: 8px; min-height: 1.6em; }
+  .spans code { color: var(--text-3); margin-right: 10px; font-size: 12px; }
+  a.quote { color: var(--accent); cursor: pointer; text-decoration: none; }
+  a.quote:hover { text-decoration: underline; }
+
+  /* 登录 */
+  .login-wrap { min-height: calc(100vh - 160px); display: grid; place-items: center; }
+  .login { width: 100%; max-width: 380px; padding: 28px; }
+  .login .logo { width: 40px; height: 40px; font-size: 18px; border-radius: 11px; margin-bottom: 14px; }
+  .login h2 { font-size: 18px; margin: 0 0 4px; }
+  .login p { margin: 0 0 18px; color: var(--text-3); font-size: 13px; }
+  .login form { display: flex; flex-direction: column; gap: 10px; }
+  .login input { padding: 9px 12px; }
+  .login button { margin-top: 6px; padding: 9px 12px; }
+  .error { color: var(--miss); font-size: 13px; margin-top: 8px; min-height: 1.4em; }
+  .loading { text-align: center; color: var(--text-3); padding: 80px 0; }
+
+  @media (max-width: 900px) {
+    .stats { grid-template-columns: repeat(3, 1fr); }
+    .stats .stat.wide { grid-column: 1 / -1; }
+  }
+  @media (max-width: 600px) {
+    .topbar, main { padding-left: 16px; padding-right: 16px; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .kv { grid-template-columns: 1fr; gap: 0; } .kv dd { margin-bottom: 8px; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>简历分析后台</h1>
-  <button id="logout" hidden>退出登录</button>
+  <div class="topbar">
+    <div class="brand"><span class="logo">简</span><span>简历分析后台 <small>Admin</small></span></div>
+    <button id="logout" class="ghost" hidden>退出登录</button>
+  </div>
 </header>
-<main id="app"></main>
+<main id="app"><div class="loading">加载中…</div></main>
 <script>
 'use strict'
 // 所有数据一律用 textContent / createElement 渲染（不用 innerHTML），用户留言里的 HTML 只会显示成文字。
@@ -112,7 +240,7 @@ function renderLogin(message) {
 }
 
 async function doRenderLogin(message) {
-  if (document.querySelector('.card.login')) return // 登录框已在页面上，不重建
+  if (document.querySelector('.login')) return // 登录框已在页面上，不重建
   logoutBtn.hidden = true
   // 服务端配了 ADMIN_USERNAME 才渲染账号输入框；config 拉不到就按仅密码渲染，提交失败由错误提示兜底
   let usernameRequired = false
@@ -123,19 +251,32 @@ async function doRenderLogin(message) {
   const userInput = usernameRequired ? el('input', { type: 'text', placeholder: '账号', autocomplete: 'username' }) : null
   const input = el('input', { type: 'password', placeholder: '管理员密码', autocomplete: 'current-password' })
   const err = el('div', { class: 'error' }, message || '')
+  const submit = el('button', { class: 'primary', type: 'submit' }, '登录')
   const form = el('form', {
     onsubmit: async (e) => {
       e.preventDefault()
-      const r = await fetch('/admin/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: userInput ? userInput.value : '', password: input.value })
-      }).then((x) => x.json())
-      if (r.ok) route()
-      else err.textContent = r.message || '登录失败'
+      submit.disabled = true
+      err.textContent = ''
+      try {
+        const r = await fetch('/admin/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: userInput ? userInput.value : '', password: input.value })
+        }).then((x) => x.json())
+        if (r.ok) return route()
+        err.textContent = r.message || '登录失败'
+      } catch (e2) {
+        err.textContent = '登录失败：' + e2.message
+      } finally {
+        submit.disabled = false
+      }
     }
-  }, userInput, input, el('button', { class: 'primary', type: 'submit' }, '登录'))
-  show(el('div', { class: 'card login' }, el('h2', {}, '登录后台'), form, err))
+  }, userInput, input, submit)
+  show(el('div', { class: 'login-wrap' }, el('div', { class: 'card login' },
+    el('div', { class: 'logo' }, '简'),
+    el('h2', {}, '登录后台'),
+    el('p', {}, '查看用户反馈、管理内测白名单与运行参数'),
+    form, err)))
   ;(userInput || input).focus()
 }
 
@@ -153,12 +294,12 @@ function select(options, value, onchange) {
 }
 
 function checkbox(label, checked, onchange) {
-  return el('label', {}, el('input', { type: 'checkbox', checked, onchange: (e) => onchange(e.target.checked) }), ' ', label)
+  return el('label', { class: 'check' }, el('input', { type: 'checkbox', checked, onchange: (e) => onchange(e.target.checked) }), label)
 }
 
 // ---------------- 内测白名单 ----------------
 function whitelistCard(entries) {
-  const input = el('input', { type: 'text', style: 'flex:1;min-width:280px', placeholder: 'openid，多个用逗号/空格分隔，可带 o: 前缀' })
+  const input = el('input', { type: 'text', placeholder: 'openid，多个用逗号/空格分隔，可带 o: 前缀', onkeydown: (e) => { if (e.key === 'Enter') mutate({ add: input.value }) } })
   const err = el('div', { class: 'error' }, '')
   async function mutate(body) {
     input.disabled = true
@@ -178,14 +319,14 @@ function whitelistCard(entries) {
     }
   }
   const chips = entries.length
-    ? entries.map((e) => el('span', { class: 'tag', style: 'margin:2px;padding:2px 10px;display:inline-flex;gap:8px;align-items:center' },
-        e, el('a', { class: 'quote', title: '从白名单移除', onclick: () => mutate({ remove: e }) }, '移除')))
-    : el('span', { class: 'muted' }, '暂无。让测试者先用一次，再从 data/db.json 里找 o: 开头的身份（o: 后面就是 openid）')
+    ? el('div', { class: 'chips' }, entries.map((e) => el('span', { class: 'chip' },
+        e, el('button', { title: '从白名单移除', 'aria-label': '移除 ' + e, onclick: () => mutate({ remove: e }) }, '×'))))
+    : el('div', { class: 'empty-box' }, '暂无。让测试者先用一次，再从 data/db.json 里找 o: 开头的身份（o: 后面就是 openid）')
   return el('div', { class: 'card' },
-    el('h2', {}, '内测白名单'),
-    el('p', { class: 'muted' }, '只支持 openid（需配置 WX_APPID/WX_APPSECRET；设备 ID 可伪造，不支持）。名单内的身份不受身份/IP 限次（分析、复制、PDF、判错），小程序端显示「暂不限次」；全站日限、内容安全、试探限制照常生效。修改即时生效并入库，重启不丢；环境变量 LIMIT_WHITELIST 只在首次初始化时作种子。'),
-    el('div', {}, chips),
-    el('div', { style: 'display:flex;gap:8px;margin-top:10px' }, input,
+    el('h2', {}, '内测白名单', el('span', { class: 'count' }, entries.length + ' 条')),
+    el('p', { class: 'hint' }, '只支持 openid（需配置 WX_APPID/WX_APPSECRET；设备 ID 可伪造，不支持）。名单内的身份不受身份/IP 限次（分析、复制、PDF、判错），小程序端显示「暂不限次」；全站日限、内容安全、试探限制照常生效。修改即时生效并入库，重启不丢。'),
+    chips,
+    el('div', { class: 'inline-form' }, input,
       el('button', { class: 'primary', onclick: () => mutate({ add: input.value }) }, '添加')),
     err)
 }
@@ -209,16 +350,15 @@ function settingsCard(items) {
     }
   }
   const rows = items.map((it) => {
-    const input = el('input', { type: 'text', style: 'width:80px', value: String(it.value) })
-    return el('div', { style: 'display:flex;gap:12px;align-items:center;margin:6px 0' },
-      el('span', { style: 'min-width:170px' }, it.label),
+    const input = el('input', { type: 'text', inputmode: 'numeric', value: String(it.value), onkeydown: (e) => { if (e.key === 'Enter') save(it.field, input.value) } })
+    return el('div', { class: 'setting' },
+      el('div', { class: 's-label' }, el('div', {}, it.label), el('small', {}, `范围 ${it.min}~${it.max}，即时生效`)),
       input,
-      el('button', { class: 'primary', onclick: () => save(it.field, input.value) }, '保存'),
-      el('span', { class: 'muted' }, `范围 ${it.min}~${it.max}；当前值即时生效，改的是今天及以后`))
+      el('button', { class: 'primary', onclick: () => save(it.field, input.value) }, '保存'))
   })
   return el('div', { class: 'card' },
     el('h2', {}, '运行参数'),
-    el('p', { class: 'muted' }, '保存后立即生效并存库，重启不丢；环境变量只在首次初始化时作种子。注意：每身份日限不能超过每 IP 日限（ANALYZE_PER_IP_PER_DAY，env 可调）；10 分钟窗口限（默认 3，env 可调）先于日限生效，把日限调大后连刷用户仍会先看到「操作太频繁」；全站日限不受这些参数影响。'),
+    el('p', { class: 'hint' }, '保存后立即生效并存库，重启不丢；环境变量只在首次初始化时作种子。每身份日限不能超过每 IP 日限（ANALYZE_PER_IP_PER_DAY）；10 分钟窗口限先于日限生效，调大日限后连刷用户仍会先看到「操作太频繁」；全站日限不受影响。'),
     ...rows,
     err)
 }
@@ -233,56 +373,64 @@ async function renderList() {
     page: String(filters.page)
   })
   const [sum, list, wl, st] = await Promise.all([api('/admin/api/summary'), api('/admin/api/feedback?' + qs), api('/admin/api/whitelist'), api('/admin/api/settings')])
-  const pct = (n) => (sum.total ? Math.round((n / sum.total) * 100) + '%' : '-')
+  const pct = (n) => (sum.total ? Math.round((n / sum.total) * 100) : 0)
+  const stat = (label, value) => el('div', { class: 'stat' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, String(value)))
+  const DIST = [['accurate', '准'], ['partial', '部分准'], ['inaccurate', '不准']]
   const stats = el('div', { class: 'stats' },
-    el('div', { class: 'stat' }, el('b', {}, sum.total), '反馈总数'),
-    el('div', { class: 'stat' }, el('b', {}, sum.last7d), '近 7 天'),
-    el('div', { class: 'stat q-accurate' }, el('b', {}, pct(sum.q1.accurate)), '准'),
-    el('div', { class: 'stat q-partial' }, el('b', {}, pct(sum.q1.partial)), '部分准'),
-    el('div', { class: 'stat q-inaccurate' }, el('b', {}, pct(sum.q1.inaccurate)), '不准'),
-    el('div', { class: 'stat' }, el('b', {}, sum.wrongItems), '被标记判错的条目')
+    stat('反馈总数', sum.total),
+    stat('近 7 天', sum.last7d),
+    stat('被标记判错的条目', sum.wrongItems),
+    el('div', { class: 'stat wide' },
+      el('div', { class: 'label' }, '「准不准」分布'),
+      el('div', { class: 'dist' }, DIST.map(([k]) => el('span', { class: 'd-' + k, style: `width:${pct(sum.q1[k])}%` }))),
+      el('div', { class: 'legend' }, DIST.map(([k, t]) => el('span', {}, el('i', { class: 'd-' + k, style: `background:var(--${k === 'accurate' ? 'hit' : k === 'partial' ? 'partial' : 'miss'})` }), t, el('b', {}, sum.total ? pct(sum.q1[k]) + '%' : '-')))))
   )
   const reload = (patch) => {
     Object.assign(filters, patch, patch.page ? {} : { page: 1 })
     renderList()
   }
   const bar = el('div', { class: 'filters' },
-    '准不准', select([['all', '全部'], ['accurate', '准'], ['partial', '部分准'], ['inaccurate', '不准'], ['none', '未填']], filters.q1, (v) => reload({ q1: v })),
+    el('label', { class: 'field' }, '准不准', select([['all', '全部'], ['accurate', '准'], ['partial', '部分准'], ['inaccurate', '不准'], ['none', '未填']], filters.q1, (v) => reload({ q1: v }))),
+    el('label', { class: 'field' }, '版本', select([['', '全部版本']].concat(list.versions.map((v) => [v, v])), filters.version, (v) => reload({ version: v }))),
     checkbox('只看有判错标记', filters.hasWrong, (v) => reload({ hasWrong: v })),
-    checkbox('只看有留言', filters.hasComment, (v) => reload({ hasComment: v })),
-    '版本', select([['', '全部版本']].concat(list.versions.map((v) => [v, v])), filters.version, (v) => reload({ version: v }))
+    checkbox('只看有留言', filters.hasComment, (v) => reload({ hasComment: v }))
   )
   const rows = list.rows.map((r) =>
     el('tr', { class: 'row', onclick: () => (location.hash = '#/report/' + encodeURIComponent(r.reportId)) },
-      el('td', {}, fmtTime(r.updatedAt)),
+      el('td', { class: 'time' }, fmtTime(r.updatedAt)),
       el('td', {}, el('span', { class: 'tag q-' + r.q1 }, Q1_TEXT[r.q1])),
-      el('td', {}, Q2_TEXT[r.q2] || r.q2),
-      el('td', {}, r.wrongCount ? String(r.wrongCount) : '-'),
-      el('td', { class: 'clip', title: r.comment }, r.comment || '-'),
-      el('td', {}, r.score == null ? '-' : String(r.score)),
-      el('td', { class: 'clip', title: r.conclusion || '' }, r.conclusion || '-'),
-      el('td', {}, STATUS_TEXT[r.status]),
-      el('td', { class: 'flags' }, r.version)
+      el('td', { class: 'nowrap' }, Q2_TEXT[r.q2] || r.q2),
+      el('td', { class: 'num' + (r.wrongCount ? ' v-miss' : ' muted') }, r.wrongCount ? String(r.wrongCount) : '-'),
+      el('td', { class: 'clip', title: r.comment }, r.comment || el('span', { class: 'muted' }, '-')),
+      el('td', { class: 'num' }, r.score == null ? '-' : String(r.score)),
+      el('td', { class: 'clip', title: r.conclusion || '' }, r.conclusion || el('span', { class: 'muted' }, '-')),
+      el('td', { class: 'nowrap status-' + r.status }, STATUS_TEXT[r.status]),
+      el('td', { class: 'flags clip', title: r.version }, r.version)
     )
   )
   const table = el('table', {},
     el('thead', {}, el('tr', {}, ['时间', '准不准', '最有用', '判错条数', '留言', '总分', '一句话结论', '报告状态', '版本'].map((h) => el('th', {}, h)))),
-    el('tbody', {}, rows.length ? rows : el('tr', {}, el('td', { colspan: 9, class: 'muted' }, '没有符合条件的反馈')))
+    el('tbody', {}, rows.length ? rows : el('tr', {}, el('td', { colspan: 9, class: 'empty' }, '没有符合条件的反馈')))
   )
   const pages = Math.max(1, Math.ceil(list.total / list.pageSize))
   const pager = el('div', { class: 'pager' },
+    el('span', { class: 'muted' }, `第 ${list.page} / ${pages} 页`),
     el('button', { disabled: list.page <= 1, onclick: () => reload({ page: list.page - 1 }) }, '上一页'),
-    el('span', { class: 'muted' }, `第 ${list.page} / ${pages} 页，共 ${list.total} 条`),
     el('button', { disabled: list.page >= pages, onclick: () => reload({ page: list.page + 1 }) }, '下一页')
   )
-  show(stats, bar, table, pager, whitelistCard(wl.entries), settingsCard(st.settings))
+  const head = el('div', { class: 'page-head' }, el('div', {}, el('h1', {}, '反馈概览'), el('p', {}, '点击任意一行查看报告详情与诊断信息')))
+  const feedback = el('div', { class: 'card flush' },
+    el('div', { class: 'card-head' }, el('h2', {}, '用户反馈', el('span', { class: 'count' }, list.total + ' 条')), bar),
+    el('div', { class: 'table-wrap', style: 'margin-top:14px' }, table),
+    el('div', { class: 'card-foot' }, pager))
+  show(head, stats, feedback, el('div', { class: 'grid-2' }, whitelistCard(wl.entries), settingsCard(st.settings)))
 }
 
 // ---------------- 报告详情 ----------------
 async function renderDetail(reportId) {
   logoutBtn.hidden = false
   const d = await api('/admin/api/report/' + encodeURIComponent(reportId))
-  const back = el('p', {}, el('a', { href: '#/', class: 'quote' }, '‹ 返回反馈列表'))
+  const back = el('a', { href: '#/', class: 'back' }, '‹ 返回反馈列表')
   if (!d.ok) return show(back, el('div', { class: 'card' }, d.message || '报告不存在'))
 
   const fb = d.feedback
@@ -309,11 +457,16 @@ async function renderDetail(reportId) {
 
   // 总分与雷达
   const radar = (r.score && r.score.radar) || []
-  parts.push(el('div', { class: 'card' }, el('h2', {}, '总分 ' + (r.score ? r.score.overall : '-') + (r.score && r.score.capped ? '（触发硬门槛封顶）' : '')),
-    el('p', {}, r.conclusion || ''),
-    el('table', {},
-      el('thead', {}, el('tr', {}, radar.map((x) => el('th', {}, (CATEGORY_TEXT[x.category] || x.category) + `（${x.count} 条）`)))),
-      el('tbody', {}, el('tr', {}, radar.map((x) => el('td', {}, String(x.value))))))))
+  parts.push(el('div', { class: 'card' },
+    el('div', { class: 'score' },
+      el('span', { class: 'muted' }, '总分'),
+      el('span', { class: 'big' }, r.score ? String(r.score.overall) : '-'),
+      r.score && r.score.capped ? el('span', { class: 'tag v-partial' }, '触发硬门槛封顶') : null),
+    r.conclusion ? el('p', { style: 'margin:10px 0 0' }, r.conclusion) : null,
+    radar.length ? el('div', { class: 'radar' }, radar.map((x) => el('div', {},
+      el('small', {}, (CATEGORY_TEXT[x.category] || x.category) + ` · ${x.count} 条`),
+      el('b', {}, String(x.value)),
+      el('div', { class: 'bar' }, el('span', { style: `width:${Math.max(0, Math.min(100, Number(x.value) || 0))}%` }))))) : null))
 
   // 逐条判定
   const reqById = Object.fromEntries((r.requirements || []).map((q) => [q.id, q]))
@@ -328,13 +481,14 @@ async function renderDetail(reportId) {
       el('td', { class: 'pre' }, j.reason || ''),
       el('td', { class: 'pre' }, j.quote ? el('a', { class: 'quote', onclick: () => focusSpan(j.quoteId) }, j.quoteId + '：' + j.quote) : '-'),
       el('td', { class: 'flags' }, (j.flags || []).join(' ') || '-'),
-      el('td', {}, wrong.has(j.reqId) ? '✗ 用户标记判错' : '')
+      el('td', {}, wrong.has(j.reqId) ? el('span', { class: 'tag v-miss' }, '用户标记判错') : '')
     )
   })
-  parts.push(el('div', { class: 'card' }, el('h2', {}, '逐条判定（红底 = 用户标记判错）'),
-    el('table', {},
+  parts.push(el('div', { class: 'card flush' },
+    el('div', { class: 'card-head' }, el('h2', {}, '逐条判定', el('span', { class: 'count' }, jrows.length + ' 条')), el('span', { class: 'muted', style: 'font-size:12.5px' }, '红底 = 用户标记判错')),
+    el('div', { class: 'table-wrap', style: 'margin-top:14px' }, el('table', {},
       el('thead', {}, el('tr', {}, ['ID', '要求', 'JD 引用', '类别 / 权重 / 年限', '判定', '理由', '简历引用', 'flags', '用户反馈'].map((h) => el('th', {}, h)))),
-      el('tbody', {}, jrows))))
+      el('tbody', {}, jrows)))))
 
   // 诊断元数据
   const meta = r.meta || {}
@@ -359,17 +513,17 @@ async function renderDetail(reportId) {
   const cited = new Set((r.judgments || []).map((j) => j.quoteId).filter(Boolean))
   parts.push(el('div', { class: 'card' }, el('h2', {}, '简历（脱敏后）'),
     Array.isArray(r.spans)
-      ? el('ol', { class: 'spans', style: 'list-style:none;padding:0;margin:0' }, r.spans.map((s) =>
+      ? el('ol', { class: 'spans' }, r.spans.map((s) =>
           el('li', { id: 'span-' + s.id, class: cited.has(s.id) ? 'cited' : '' }, el('code', {}, s.id), s.text)))
       : el('p', { class: 'muted' }, '简历内容已清除')))
 
   // 改写建议
   const rw = r.rewrites || []
-  parts.push(el('div', { class: 'card' }, el('h2', {}, '改写建议（' + (r.rewritesStatus || '-') + '）'),
+  parts.push(el('div', { class: 'card' }, el('h2', {}, '改写建议', el('span', { class: 'count' }, r.rewritesStatus || '-')),
     rw.length
-      ? el('table', {},
+      ? el('div', { class: 'table-wrap' }, el('table', {},
           el('thead', {}, el('tr', {}, ['要求', '类型', '原句', '改写', '说明'].map((h) => el('th', {}, h)))),
-          el('tbody', {}, rw.map((x) => el('tr', {}, el('td', {}, x.reqId), el('td', {}, x.type), el('td', { class: 'pre' }, x.original || '-'), el('td', { class: 'pre' }, x.rewrite || ''), el('td', { class: 'pre' }, x.note || '')))))
+          el('tbody', {}, rw.map((x) => el('tr', {}, el('td', {}, x.reqId), el('td', {}, x.type), el('td', { class: 'pre' }, x.original || '-'), el('td', { class: 'pre' }, x.rewrite || ''), el('td', { class: 'pre' }, x.note || ''))))))
       : el('p', { class: 'muted' }, '无')))
 
   show(...parts)
@@ -389,7 +543,7 @@ function route() {
   const m = location.hash.match(/^#\/report\/(.+)$/)
   const p = m ? renderDetail(decodeURIComponent(m[1])) : renderList()
   p.catch((e) => {
-    if (e.message !== 'UNAUTHORIZED') show(el('div', { class: 'card error' }, '加载失败：' + e.message))
+    if (e.message !== 'UNAUTHORIZED') show(el('div', { class: 'card' }, el('div', { class: 'error' }, '加载失败：' + e.message)))
   })
 }
 window.addEventListener('hashchange', route)
