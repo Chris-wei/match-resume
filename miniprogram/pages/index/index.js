@@ -5,6 +5,7 @@ Page({
   data: {
     quotaLeft: null,
     quotaLimit: null,
+    quotaUnlimited: false,
     reports: [],
     sampleRadar: [
       { label: '技能', value: 82, count: 5 },
@@ -21,7 +22,7 @@ Page({
   loadQuota() {
     api
       .get('/api/quota', { loading: false })
-      .then((r) => this.setData({ quotaLeft: r.analyze.remaining, quotaLimit: r.analyze.limit }))
+      .then((r) => this.setData({ quotaLeft: r.analyze.remaining, quotaLimit: r.analyze.limit, quotaUnlimited: r.unlimited === true }))
       .catch(() => {})
   },
   loadReports() {

@@ -26,6 +26,8 @@ const { proposeRewrites } = require('./rewrite')
 const { redact, redactSpans } = require('./redact')
 const { segmentResume } = require('./segment')
 const moderation = require('./moderation')
+const whitelist = require('./whitelist')
+const settings = require('./settings')
 const { promptVersions } = require('./versions')
 const admin = require('./admin')
 const { normalize } = require('./text')
@@ -230,7 +232,9 @@ const routes = {
       mock: config.LLM_MOCK,
       model: config.LLM_MOCK ? 'mock' : config.LLM_MODEL,
       judgeModel: config.LLM_MOCK ? 'mock' : judgeModel(),
-      moderation: moderation.mode()
+      moderation: moderation.mode(),
+      // 只暴露条数不暴露内容；部署后用它可以确认 LIMIT_WHITELIST 配置生效
+      limitWhitelist: config.LIMIT_WHITELIST.length
     })
   },
 
@@ -518,6 +522,15 @@ if (released > 0) console.log(`启动清理：退还 ${released} 次未完成分
 for (const r of db.data.reports) {
   if (r.rewritesStatus === 'pending') r.rewritesStatus = 'failed' // 生成改写的进程已经不在了
 }
+const wl = whitelist.init(db)
+if (wl.seeded) console.log(`内测白名单：从 LIMIT_WHITELIST 种入 ${wl.entries.length} 条（已入库，之后以后台/库为准）`)
+else if (wl.entries.length) console.log(`内测白名单：从数据库载入 ${wl.entries.length} 条`)
+if (wl.entries.length && !(config.WX_APPID && config.WX_APPSECRET)) {
+  console.warn('⚠ 内测白名单只认 openid，但未配置 WX_APPID/WX_APPSECRET（身份走设备 ID），白名单不会生效')
+}
+const st = settings.init(db)
+if (st.seeded.length) console.log(`运行参数：种入 ${st.seeded.join('、')}（已入库，之后以后台/库为准）`)
+if (st.applied.length) console.log(`运行参数：从数据库应用 ${st.applied.join('、')}`)
 db.save()
 setInterval(() => db.prune(Date.now()), DAY_MS).unref()
 setInterval(() => jobs.sweep(), 60e3).unref()

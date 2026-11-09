@@ -46,11 +46,12 @@
 
 <!-- 底部提交栏 -->
 <view class="submit-bar">
-  <view class="submit-meta" wx:if="{{quotaLeft !== null}}">
-    <block wx:if="{{quotaLeft > 0}}">今日还可免费分析 <text class="em">{{quotaLeft}}</text> 次</block>
+  <view class="submit-meta" wx:if="{{quotaUnlimited || quotaLeft !== null}}">
+    <block wx:if="{{quotaUnlimited}}">内测白名单 · 暂不限次</block>
+    <block wx:elif="{{quotaLeft > 0}}">今日还可免费分析 <text class="em">{{quotaLeft}}</text> 次</block>
     <block wx:else>今日免费次数已用完，明天再来</block>
   </view>
-  <button class="btn-primary" bindtap="startAnalyze" disabled="{{analyzing || quotaLeft === 0}}">
+  <button class="btn-primary" bindtap="startAnalyze" disabled="{{analyzing || (quotaLeft === 0 && !quotaUnlimited)}}">
     {{analyzing ? '分析中…' : '开始分析'}}
   </button>
 </view>

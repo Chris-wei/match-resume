@@ -21,7 +21,7 @@
   .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; min-width: 120px; }
   .stat b { display: block; font-size: 20px; }
   .filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
-  select, input[type=password], button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  select, input[type=text], input[type=password], button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
   button { cursor: pointer; }
   button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   table { width: 100%; border-collapse: collapse; background: var(--card); }
@@ -46,8 +46,8 @@
   a.quote { color: var(--accent); cursor: pointer; text-decoration: underline; }
   .pager { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
   .login { max-width: 360px; margin: 120px auto; }
-  .login form { display: flex; gap: 8px; }
-  .login input { flex: 1; }
+  .login form { display: flex; flex-direction: column; gap: 8px; }
+  .login button { margin-top: 4px; }
   .error { color: var(--miss); margin-top: 8px; min-height: 1.6em; }
 </style>
 </head>
@@ -102,8 +102,25 @@ async function api(path, opts = {}) {
 }
 
 // ---------------- 登录 ----------------
+// 并发的多个 401（列表页一次发 4 个请求）只渲染一次登录框：
+// 否则迟到的那次会替换掉管理员正在输入的表单
+let loginRendering = null
 function renderLogin(message) {
+  if (loginRendering) return loginRendering
+  loginRendering = doRenderLogin(message).finally(() => { loginRendering = null })
+  return loginRendering
+}
+
+async function doRenderLogin(message) {
+  if (document.querySelector('.card.login')) return // 登录框已在页面上，不重建
   logoutBtn.hidden = true
+  // 服务端配了 ADMIN_USERNAME 才渲染账号输入框；config 拉不到就按仅密码渲染，提交失败由错误提示兜底
+  let usernameRequired = false
+  try {
+    const c = await fetch('/admin/api/config').then((x) => x.json())
+    usernameRequired = !!(c && c.ok && c.usernameRequired)
+  } catch {}
+  const userInput = usernameRequired ? el('input', { type: 'text', placeholder: '账号', autocomplete: 'username' }) : null
   const input = el('input', { type: 'password', placeholder: '管理员密码', autocomplete: 'current-password' })
   const err = el('div', { class: 'error' }, message || '')
   const form = el('form', {
@@ -112,14 +129,14 @@ function renderLogin(message) {
       const r = await fetch('/admin/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: input.value })
+        body: JSON.stringify({ username: userInput ? userInput.value : '', password: input.value })
       }).then((x) => x.json())
       if (r.ok) route()
       else err.textContent = r.message || '登录失败'
     }
-  }, input, el('button', { class: 'primary', type: 'submit' }, '登录'))
+  }, userInput, input, el('button', { class: 'primary', type: 'submit' }, '登录'))
   show(el('div', { class: 'card login' }, el('h2', {}, '登录后台'), form, err))
-  input.focus()
+  ;(userInput || input).focus()
 }
 
 logoutBtn.addEventListener('click', async () => {
@@ -139,6 +156,73 @@ function checkbox(label, checked, onchange) {
   return el('label', {}, el('input', { type: 'checkbox', checked, onchange: (e) => onchange(e.target.checked) }), ' ', label)
 }
 
+// ---------------- 内测白名单 ----------------
+function whitelistCard(entries) {
+  const input = el('input', { type: 'text', style: 'flex:1;min-width:280px', placeholder: 'openid，多个用逗号/空格分隔，可带 o: 前缀' })
+  const err = el('div', { class: 'error' }, '')
+  async function mutate(body) {
+    input.disabled = true
+    try {
+      const r = await fetch('/admin/api/whitelist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body)
+      }).then((x) => x.json())
+      if (r.ok) renderList()
+      else err.textContent = r.message || '操作失败'
+    } catch (e) {
+      err.textContent = '操作失败：' + e.message
+    } finally {
+      input.disabled = false
+    }
+  }
+  const chips = entries.length
+    ? entries.map((e) => el('span', { class: 'tag', style: 'margin:2px;padding:2px 10px;display:inline-flex;gap:8px;align-items:center' },
+        e, el('a', { class: 'quote', title: '从白名单移除', onclick: () => mutate({ remove: e }) }, '移除')))
+    : el('span', { class: 'muted' }, '暂无。让测试者先用一次，再从 data/db.json 里找 o: 开头的身份（o: 后面就是 openid）')
+  return el('div', { class: 'card' },
+    el('h2', {}, '内测白名单'),
+    el('p', { class: 'muted' }, '只支持 openid（需配置 WX_APPID/WX_APPSECRET；设备 ID 可伪造，不支持）。名单内的身份不受身份/IP 限次（分析、复制、PDF、判错），小程序端显示「暂不限次」；全站日限、内容安全、试探限制照常生效。修改即时生效并入库，重启不丢；环境变量 LIMIT_WHITELIST 只在首次初始化时作种子。'),
+    el('div', {}, chips),
+    el('div', { style: 'display:flex;gap:8px;margin-top:10px' }, input,
+      el('button', { class: 'primary', onclick: () => mutate({ add: input.value }) }, '添加')),
+    err)
+}
+
+// ---------------- 运行参数（在线可调的限次等） ----------------
+function settingsCard(items) {
+  const err = el('div', { class: 'error' }, '')
+  async function save(field, value) {
+    err.textContent = ''
+    try {
+      const r = await fetch('/admin/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ field, value })
+      }).then((x) => x.json())
+      if (r.ok) renderList()
+      else err.textContent = r.message || '保存失败'
+    } catch (e) {
+      err.textContent = '保存失败：' + e.message
+    }
+  }
+  const rows = items.map((it) => {
+    const input = el('input', { type: 'text', style: 'width:80px', value: String(it.value) })
+    return el('div', { style: 'display:flex;gap:12px;align-items:center;margin:6px 0' },
+      el('span', { style: 'min-width:170px' }, it.label),
+      input,
+      el('button', { class: 'primary', onclick: () => save(it.field, input.value) }, '保存'),
+      el('span', { class: 'muted' }, `范围 ${it.min}~${it.max}；当前值即时生效，改的是今天及以后`))
+  })
+  return el('div', { class: 'card' },
+    el('h2', {}, '运行参数'),
+    el('p', { class: 'muted' }, '保存后立即生效并存库，重启不丢；环境变量只在首次初始化时作种子。注意：每身份日限不能超过每 IP 日限（ANALYZE_PER_IP_PER_DAY，env 可调）；10 分钟窗口限（默认 3，env 可调）先于日限生效，把日限调大后连刷用户仍会先看到「操作太频繁」；全站日限不受这些参数影响。'),
+    ...rows,
+    err)
+}
+
 async function renderList() {
   logoutBtn.hidden = false
   const qs = new URLSearchParams({
@@ -148,7 +232,7 @@ async function renderList() {
     version: filters.version,
     page: String(filters.page)
   })
-  const [sum, list] = await Promise.all([api('/admin/api/summary'), api('/admin/api/feedback?' + qs)])
+  const [sum, list, wl, st] = await Promise.all([api('/admin/api/summary'), api('/admin/api/feedback?' + qs), api('/admin/api/whitelist'), api('/admin/api/settings')])
   const pct = (n) => (sum.total ? Math.round((n / sum.total) * 100) + '%' : '-')
   const stats = el('div', { class: 'stats' },
     el('div', { class: 'stat' }, el('b', {}, sum.total), '反馈总数'),
@@ -191,7 +275,7 @@ async function renderList() {
     el('span', { class: 'muted' }, `第 ${list.page} / ${pages} 页，共 ${list.total} 条`),
     el('button', { disabled: list.page >= pages, onclick: () => reload({ page: list.page + 1 }) }, '下一页')
   )
-  show(stats, bar, table, pager)
+  show(stats, bar, table, pager, whitelistCard(wl.entries), settingsCard(st.settings))
 }
 
 // ---------------- 报告详情 ----------------

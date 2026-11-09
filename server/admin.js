@@ -1,7 +1,7 @@
 // 网页后台：/admin 页面 + /admin/api/* 数据接口（只给开发者本人用）。
 //   - ADMIN_PASSWORD 未设置 → /admin* 一律 404（后台完全关闭）
-//   - 登录：密码常量时间比较 → HttpOnly + SameSite=Strict 会话 cookie（HMAC 签名，12 小时）
-//   - 防爆破：同一 IP 10 分钟内失败 5 次即锁定
+//   - 登录：密码常量时间比较（同时配了 ADMIN_USERNAME 则账号也须匹配）→ HttpOnly + SameSite=Strict 会话 cookie（HMAC 签名，12 小时）
+//   - 防爆破：同一 IP 10 分钟内失败 5 次即锁定（账号错、密码错都算失败）
 //   - 后台 cookie 与小程序 token 签名输入不同（加 'admin.' 前缀），互不通用
 // 查询逻辑见 adminQuery.js；设计文档 §5。
 
@@ -12,6 +12,8 @@ const config = require('./config')
 const db = require('./db')
 const { secretKey, ipHashOf } = require('./auth')
 const adminQuery = require('./adminQuery')
+const whitelist = require('./whitelist')
+const settings = require('./settings')
 
 const COOKIE = 'admin_session'
 const LOCK_WINDOW_MS = 10 * 60e3
@@ -49,6 +51,14 @@ function passwordOk(input) {
   // 先各自哈希成等长再比较，长度不同也不泄露时间差
   const a = crypto.createHash('sha256').update(String(input || '')).digest()
   const b = crypto.createHash('sha256').update(config.ADMIN_PASSWORD).digest()
+  return crypto.timingSafeEqual(a, b)
+}
+
+function usernameOk(input) {
+  // 只配密码时不校验账号（向后兼容）；配了则账号必须匹配
+  if (!config.ADMIN_USERNAME) return true
+  const a = crypto.createHash('sha256').update(String(input || '')).digest()
+  const b = crypto.createHash('sha256').update(config.ADMIN_USERNAME).digest()
   return crypto.timingSafeEqual(a, b)
 }
 
@@ -114,6 +124,11 @@ async function handle(req, res, url) {
     return res.end(fs.readFileSync(HTML_FILE))
   }
 
+  // 登录页据此决定要不要渲染账号输入框（无敏感信息，仅当后台已开启时可访问）
+  if (req.method === 'GET' && p === '/admin/api/config') {
+    return sendJSON(res, 200, { ok: true, usernameRequired: !!config.ADMIN_USERNAME })
+  }
+
   if (req.method === 'POST' && p === '/admin/api/login') {
     const ipHash = ipHashOf(req)
     if (recentFailures(ipHash, now).length >= LOCK_MAX_FAILURES) {
@@ -124,9 +139,14 @@ async function handle(req, res, url) {
     if (recentFailures(ipHash, Date.now()).length >= LOCK_MAX_FAILURES) {
       return sendJSON(res, 200, fail('LOCKED', '尝试次数过多，请 10 分钟后再试'))
     }
-    if (!body || !passwordOk(body.password)) {
+    const creds = body || {}
+    // 配了账号时，失败提示统一「账号或密码错误」，不泄露哪一半不对
+    // 两项都算完再判断：短路求值会让「账号对」的请求明显更慢，从耗时就能确认账号
+    const userGood = usernameOk(creds.username)
+    const passGood = passwordOk(creds.password)
+    if (!userGood || !passGood) {
       recentFailures(ipHash, Date.now()).push(Date.now())
-      return sendJSON(res, 200, fail('BAD_PASSWORD', '密码错误'))
+      return sendJSON(res, 200, fail('BAD_PASSWORD', config.ADMIN_USERNAME ? '账号或密码错误' : '密码错误'))
     }
     failures.delete(ipHash)
     return sendJSON(res, 200, { ok: true }, { 'Set-Cookie': `${COOKIE}=${issueSession(now)}; ${cookieAttrs(config.ADMIN_SESSION_HOURS * 3600)}` })
@@ -138,6 +158,46 @@ async function handle(req, res, url) {
 
   if (!p.startsWith('/admin/api/')) return sendJSON(res, 404, fail('NOT_FOUND', '接口不存在'))
   if (!verifySession(cookieOf(req, COOKIE), now)) return sendJSON(res, 401, fail('UNAUTHORIZED', '请先登录'))
+
+  // 内测白名单：GET 查看 / POST 增删（{ add: 'a, b' } 或 { remove: '条目' }）。
+  // 改动写内存 + db.settings，即时生效、重启不丢（见 whitelist.js）
+  if (p === '/admin/api/whitelist') {
+    if (req.method === 'GET') return sendJSON(res, 200, { ok: true, entries: config.LIMIT_WHITELIST })
+    if (req.method === 'POST') {
+      const body = await readJSON(req)
+      if (!body || (typeof body.add !== 'string' && typeof body.remove !== 'string')) {
+        return sendJSON(res, 200, fail('BAD_INPUT', '缺少 add 或 remove'))
+      }
+      if (typeof body.remove === 'string') {
+        whitelist.removeEntries(db, [body.remove])
+      } else {
+        const { entries, invalid } = whitelist.normalizeEntries(body.add)
+        if (invalid.length) return sendJSON(res, 200, fail('BAD_ENTRY', `条目格式不对（只支持 openid，可带 o: 前缀；不支持设备 ID）：${invalid.join('、')}`))
+        if (!entries.length) return sendJSON(res, 200, fail('BAD_INPUT', '没有可添加的条目'))
+        if (whitelist.mergedWith(entries).length > whitelist.MAX_ENTRIES) {
+          return sendJSON(res, 200, fail('TOO_MANY', `白名单最多 ${whitelist.MAX_ENTRIES} 条`))
+        }
+        whitelist.addEntries(db, entries)
+      }
+      console.log(`[admin] 白名单已更新，当前 ${config.LIMIT_WHITELIST.length} 条`)
+      return sendJSON(res, 200, { ok: true, entries: config.LIMIT_WHITELIST })
+    }
+  }
+
+  // 运行参数（如每身份每日分析次数）：GET 查看列表 / POST { field, value } 改单个，
+  // 即时生效、入库持久（见 settings.js）
+  if (p === '/admin/api/settings') {
+    if (req.method === 'GET') return sendJSON(res, 200, { ok: true, settings: settings.list() })
+    if (req.method === 'POST') {
+      const body = await readJSON(req)
+      if (!body || typeof body.field !== 'string') return sendJSON(res, 200, fail('BAD_INPUT', '缺少 field'))
+      const r = settings.setValue(db, body.field, body.value)
+      if (!r.ok) return sendJSON(res, 200, fail(r.code, r.message))
+      console.log(`[admin] 运行参数 ${body.field} = ${r.value}`)
+      return sendJSON(res, 200, { ok: true, settings: settings.list() })
+    }
+  }
+
   if (req.method !== 'GET') return sendJSON(res, 405, fail('BAD_METHOD', '不支持的请求方法'))
 
   const data = db.data

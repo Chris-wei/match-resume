@@ -33,6 +33,8 @@ const versions = require(S('versions'))
 const retention = require(S('retention'))
 const fb = require(S('feedback'))
 const aq = require(S('adminQuery'))
+const whitelist = require(S('whitelist'))
+const settings = require(S('settings'))
 
 let passed = 0
 let failed = 0
@@ -62,7 +64,8 @@ function fakeDb(usage) {
   return { countUsage: (filter, since) => usage.filter(
     (u) => u.kind === filter.kind && u.createdAt >= since &&
       (!filter.owner || u.owner === filter.owner) &&
-      (!filter.ipHash || u.ipHash === filter.ipHash)
+      (!filter.ipHash || u.ipHash === filter.ipHash) &&
+      (!filter.ownerFilter || filter.ownerFilter(u.owner))
   ).length }
 }
 
@@ -261,6 +264,181 @@ test('复制 2 条 → 放行且余 0', () => {
 test('quotaInfo 统计今日用量', () => {
   const q = limits.quotaInfo(fakeDb([u('analyze', 'u1', 'ip1', TODAY + 1), u('copy', 'u1', 'ip1', TODAY + 2)]), 'u1', 'ip1', NOW, CFG)
   assert.equal(q.analyze.remaining, 2) && assert.equal(q.copies.remaining, 2)
+})
+
+console.log('\n== 单测：内测白名单（豁免身份/IP 限次；全站日限与试探限制照常）==')
+// 条目存不带前缀的 openid；只有 o: 身份能匹配
+const WLCFG = { ...CFG, LIMIT_WHITELIST: ['tester-o123'] }
+const mkWl = (usage, owner) => limits.checkAnalyze(fakeDb(usage), owner || 'o:tester-o123', 'ip1', NOW, WLCFG)
+test('白名单身份：身份日限 / IP 日限 / 双 10 分钟窗全满 → 放行', () => {
+  const usage = []
+  for (let i = 0; i < 3; i++) usage.push(u('analyze', 'o:tester-o123', 'ip9', TODAY + i * 1000)) // 身份日限满
+  for (let i = 0; i < 10; i++) usage.push(u('analyze', 'u' + i, 'ip1', TODAY + i * 1000)) // IP 日限满（换设备也没用）
+  for (let i = 0; i < 3; i++) usage.push(u('analyze', 'o:tester-o123', 'ip9', NOW - i * 1000)) // 身份 10 分钟窗满
+  for (let i = 0; i < 5; i++) usage.push(u('analyze', 'u' + i, 'ip1', NOW - i * 1000)) // IP 10 分钟窗满
+  assert.ok(mkWl(usage).ok)
+})
+test('非白名单身份照常被限', () => {
+  const usage = [u('analyze', 'u1', 'ip9', TODAY + 1), u('analyze', 'u1', 'ip9', TODAY + 2), u('analyze', 'u1', 'ip9', TODAY + 3)]
+  assert.equal(mkWl(usage, 'u1').code, 'QUOTA_EXCEEDED')
+})
+test('白名单只认 openid：同名设备身份不能冒用', () => {
+  const cfg = { LIMIT_WHITELIST: ['oXYZ12345678'] }
+  assert.equal(limits.isWhitelisted('o:oXYZ12345678', cfg), true)
+  assert.equal(limits.isWhitelisted('d:oXYZ12345678', cfg), false)
+  assert.equal(limits.isWhitelisted('oXYZ12345678', cfg), false)
+  assert.equal(limits.isWhitelisted('o:other1234567', cfg), false)
+})
+test('白名单身份的用量不计入 IP 计数：同网络普通用户不被挤占', () => {
+  const usage = []
+  for (let i = 0; i < 10; i++) usage.push(u('analyze', 'o:tester-o123', 'ip1', TODAY + i * 1000)) // IP 日限数量
+  for (let i = 0; i < 5; i++) usage.push(u('analyze', 'o:tester-o123', 'ip1', NOW - i * 1000)) // IP 10 分钟窗数量
+  assert.ok(mkWl(usage, 'o:colleague1').ok)
+  // 对照：同样的量来自普通用户就会被拦
+  const plain = usage.map((r) => ({ ...r, owner: 'o:other' }))
+  assert.equal(mkWl(plain, 'o:colleague1').code, 'RATE_LIMITED')
+})
+test('白名单身份仍受全站日限', () => {
+  const usage = []
+  for (let i = 0; i < 200; i++) usage.push(u('analyze', 'u' + i, 'ip' + i, TODAY + 1000))
+  assert.equal(mkWl(usage).code, 'GLOBAL_LIMITED')
+})
+test('白名单身份：复制 / PDF / 判错超限放行（复制 remaining 为 null）', () => {
+  const copyUsage = []
+  for (let i = 0; i < 3; i++) copyUsage.push(u('copy', 'o:tester-o123', 'ip1', TODAY + i))
+  const cr = limits.checkCopy(fakeDb(copyUsage), 'o:tester-o123', NOW, WLCFG)
+  assert.ok(cr.ok) && assert.equal(cr.remaining, null)
+  const pdfUsage = []
+  for (let i = 0; i < 20; i++) pdfUsage.push(u('pdf', 'o:tester-o123', 'ip1', TODAY + i))
+  assert.ok(limits.checkPdf(fakeDb(pdfUsage), 'o:tester-o123', NOW, { ...WLCFG, PDF_PER_IDENTITY_PER_10MIN: 5, PDF_PER_IDENTITY_PER_DAY: 20 }).ok)
+  const flagUsage = []
+  for (let i = 0; i < 100; i++) flagUsage.push(u('flag', 'o:tester-o123', 'ip1', TODAY + i))
+  assert.ok(limits.checkFlag(fakeDb(flagUsage), 'o:tester-o123', NOW, { ...WLCFG, FLAG_PER_IDENTITY_PER_DAY: 100 }).ok)
+})
+test('被拦试探限制对白名单不豁免', () => {
+  const cfg = { MODERATION_BLOCKS_PER_10MIN: 5, LIMIT_WHITELIST: ['tester-o123'] }
+  const five = Array.from({ length: 5 }, (_, i) => u('blocked', 'o:tester-o123', 'ip1', NOW - i * 1000))
+  assert.equal(limits.checkBlocked(fakeDb(five), 'o:tester-o123', 'ipX', NOW, cfg).code, 'RATE_LIMITED')
+})
+test('quotaInfo：白名单 unlimited=true 且不扫用量表；普通身份数值正常', () => {
+  const noScan = { countUsage() { throw new Error('白名单不该统计用量') } }
+  const w = limits.quotaInfo(noScan, 'o:tester-o123', 'ip1', NOW, WLCFG)
+  assert.equal(w.unlimited, true) && assert.equal(w.analyze.remaining, null) && assert.equal(w.copies.limit, null) && assert.equal(w.analyze.used, null)
+  assert.equal(limits.checkCopy(noScan, 'o:tester-o123', NOW, WLCFG).ok, true)
+  const n = limits.quotaInfo(fakeDb([u('analyze', 'u1', 'ip1', TODAY + 1)]), 'u1', 'ip1', NOW, CFG)
+  assert.equal(n.unlimited, false) && assert.equal(n.analyze.remaining, 2)
+})
+
+console.log('\n== 单测：白名单后台配置（校验 / 增删 / 种子语义）==')
+test('normalizeEntries：逗号/空白分隔、去 o: 前缀后去重、d: 与非法条目单独报出', () => {
+  const r = whitelist.normalizeEntries(' oX12345678 ,dDevice12345\n，o:oX12345678，d:dev12345678，坏.条目，短')
+  assert.deepEqual(r.entries, ['oX12345678', 'dDevice12345'])
+  assert.deepEqual(r.invalid, ['d:dev12345678', '坏.条目', '短'])
+})
+test('addEntries 去重合并、removeEntries 去 o: 前缀后精确匹配', () => {
+  const cfg = { LIMIT_WHITELIST: ['aaaaaaaa1'] }
+  const store = () => ({ data: { settings: {} }, save() { this.saved = true } })
+  const d1 = store()
+  const merged = whitelist.addEntries(d1, ['bbbbbbbb1', 'aaaaaaaa1', 'bbbbbbbb1'], cfg)
+  assert.deepEqual(merged, ['aaaaaaaa1', 'bbbbbbbb1'])
+  assert.equal(d1.saved, true)
+  assert.deepEqual(d1.data.settings.limitWhitelist, merged)
+  assert.deepEqual(cfg.LIMIT_WHITELIST, merged)
+  assert.deepEqual(whitelist.removeEntries(store(), ['o:bbbbbbbb1'], cfg), ['aaaaaaaa1'])
+  assert.deepEqual(whitelist.removeEntries(store(), ['aaaaaaaa1'], cfg), [])
+})
+test('mergedWith：已存在的条目不占新名额（上限按合并后计）', () => {
+  const cfg = { LIMIT_WHITELIST: Array.from({ length: 48 }, (_, i) => 'openid-' + String(i).padStart(4, '0')) }
+  const add = ['openid-0000', 'openid-0001', 'openid-0002', 'openid-0003', 'openid-new1']
+  assert.equal(whitelist.mergedWith(add, cfg).length, 49)
+  assert.equal(cfg.LIMIT_WHITELIST.length, 48) // 不落盘、不改原列表
+})
+test('init：库里没字段时用 env 作种子并入库；有字段（含空数组）一律以库为准', () => {
+  const d1 = { data: { settings: {} }, save() {} }
+  const r1 = whitelist.init(d1, { LIMIT_WHITELIST: ['seed-1111111', '坏.条目'] })
+  assert.equal(r1.seeded, true)
+  assert.deepEqual(r1.entries, ['seed-1111111'])
+  assert.deepEqual(d1.data.settings.limitWhitelist, ['seed-1111111'])
+  const d2 = { data: { settings: { limitWhitelist: ['from-db-111'] } }, save() {} }
+  const r2 = whitelist.init(d2, { LIMIT_WHITELIST: ['from-env-111'] })
+  assert.equal(r2.seeded, false)
+  assert.deepEqual(r2.entries, ['from-db-111'])
+  const d3 = { data: { settings: { limitWhitelist: [] } }, save() {} }
+  const r3 = whitelist.init(d3, { LIMIT_WHITELIST: ['from-env-111'] })
+  assert.equal(r3.seeded, false)
+  assert.deepEqual(r3.entries, [])
+})
+test('init：旧库里的 d: 设备条目被清掉、o: 前缀被去掉并回写库', () => {
+  const d = { data: { settings: { limitWhitelist: ['o:oid-1234567', 'd:dev-1234567', 'oid-7654321'] } }, save() { this.saved = true } }
+  const cfg = { LIMIT_WHITELIST: [] }
+  const r = whitelist.init(d, cfg)
+  assert.deepEqual(r.entries, ['oid-1234567', 'oid-7654321'])
+  assert.deepEqual(d.data.settings.limitWhitelist, ['oid-1234567', 'oid-7654321'])
+  assert.deepEqual(cfg.LIMIT_WHITELIST, ['oid-1234567', 'oid-7654321'])
+  assert.equal(d.saved, true)
+})
+
+console.log('\n== 单测：运行参数后台配置（每日分析次数在线可调）==')
+test('setValue：合法值写 config 与库；非法值整拒并提示范围', () => {
+  const cfg = { ANALYZE_PER_IDENTITY_PER_DAY: 3 }
+  const d = { data: { settings: {} }, save() { this.saved = true } }
+  const r = settings.setValue(d, 'analyzePerIdentityPerDay', 5, cfg)
+  assert.equal(r.ok, true) && assert.equal(r.value, 5)
+  assert.equal(cfg.ANALYZE_PER_IDENTITY_PER_DAY, 5)
+  assert.equal(d.data.settings.analyzePerIdentityPerDay, 5)
+  assert.equal(d.saved, true)
+  for (const v of [0, 101, 1.5, 'abc', '']) {
+    const bad = settings.setValue({ data: { settings: {} }, save() {} }, 'analyzePerIdentityPerDay', v, cfg)
+    assert.equal(bad.ok, false, String(v))
+    assert.equal(bad.code, 'BAD_VALUE', String(v))
+  }
+  assert.equal(settings.setValue({ data: { settings: {} }, save() {} }, 'noSuchField', 3, cfg).code, 'BAD_FIELD')
+})
+test('setValue 接受数字字符串（后台输入框原样提交）', () => {
+  const cfg = { ANALYZE_PER_IDENTITY_PER_DAY: 3 }
+  const r = settings.setValue({ data: { settings: {} }, save() {} }, 'analyzePerIdentityPerDay', ' 7 ', cfg)
+  assert.equal(r.ok, true) && assert.equal(cfg.ANALYZE_PER_IDENTITY_PER_DAY, 7)
+})
+test('init：库里没字段时种入 config 当前值；库里合法值覆盖 config；非法存量值重置回种子', () => {
+  const d1 = { data: { settings: {} }, save() {} }
+  const r1 = settings.init(d1, { ANALYZE_PER_IDENTITY_PER_DAY: 3 })
+  assert.deepEqual(r1.seeded, ['analyzePerIdentityPerDay'])
+  assert.equal(d1.data.settings.analyzePerIdentityPerDay, 3)
+  const d2 = { data: { settings: { analyzePerIdentityPerDay: 10 } }, save() {} }
+  const r2 = settings.init(d2, { ANALYZE_PER_IDENTITY_PER_DAY: 3 })
+  assert.deepEqual(r2.applied, ['analyzePerIdentityPerDay'])
+  assert.equal(d2.data.settings.analyzePerIdentityPerDay, 10)
+  const d3 = { data: { settings: { analyzePerIdentityPerDay: 999 } }, save() {} }
+  const r3 = settings.init(d3, { ANALYZE_PER_IDENTITY_PER_DAY: 3 })
+  assert.deepEqual(r3.seeded, ['analyzePerIdentityPerDay'])
+  assert.equal(d3.data.settings.analyzePerIdentityPerDay, 3)
+})
+test('每身份日限上限跟随每 IP 日限：超过时拒绝并说明原因', () => {
+  const cfg = { ANALYZE_PER_IDENTITY_PER_DAY: 3, ANALYZE_PER_IP_PER_DAY: 10 }
+  const r = settings.setValue({ data: { settings: {} }, save() {} }, 'analyzePerIdentityPerDay', 20, cfg)
+  assert.equal(r.code, 'BAD_VALUE')
+  assert.ok(r.message.includes('1~10') && r.message.includes('ANALYZE_PER_IP_PER_DAY'))
+  assert.ok(settings.setValue({ data: { settings: {} }, save() {} }, 'analyzePerIdentityPerDay', 10, cfg).ok)
+  assert.equal(settings.list(cfg)[0].max, 10)
+})
+test('init：env 种子越界时夹到合法范围再入库，下次启动按库应用', () => {
+  for (const [seed, want] of [[0, 1], [200, 10]]) {
+    const cfg = { ANALYZE_PER_IDENTITY_PER_DAY: seed, ANALYZE_PER_IP_PER_DAY: 10 }
+    const d = { data: { settings: {} }, save() {} }
+    const r1 = settings.init(d, cfg)
+    assert.deepEqual(r1.seeded, ['analyzePerIdentityPerDay'])
+    assert.equal(cfg.ANALYZE_PER_IDENTITY_PER_DAY, want)
+    assert.equal(d.data.settings.analyzePerIdentityPerDay, want)
+    const r2 = settings.init(d, { ANALYZE_PER_IDENTITY_PER_DAY: seed, ANALYZE_PER_IP_PER_DAY: 10 })
+    assert.deepEqual(r2.applied, ['analyzePerIdentityPerDay'])
+  }
+})
+test('list：返回字段、标签、当前值与范围', () => {
+  const items = settings.list({ ANALYZE_PER_IDENTITY_PER_DAY: 4 })
+  const it = items.find((x) => x.field === 'analyzePerIdentityPerDay')
+  assert.equal(it.label, '每身份每日分析次数')
+  assert.equal(it.value, 4)
+  assert.equal(it.min, 1) && assert.equal(it.max, 100)
 })
 
 console.log('\n== 单测：模型输出 JSON 抽取 ==')

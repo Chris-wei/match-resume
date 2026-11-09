@@ -34,6 +34,7 @@ Page({
     pdfBusy: false,
     quotaLeft: null,
     quotaLimit: null,
+    quotaUnlimited: false,
     agreed: false,
     showAgree: false,
     analyzing: false,
@@ -52,7 +53,7 @@ Page({
     api
       .get('/api/quota', { loading: false })
       .then((r) => {
-        const patch = { quotaLeft: r.analyze.remaining, quotaLimit: r.analyze.limit }
+        const patch = { quotaLeft: r.analyze.remaining, quotaLimit: r.analyze.limit, quotaUnlimited: r.unlimited === true }
         // 输入上限以服务端为准（本地 config 只是首屏默认值）
         if (r.input) {
           patch.maxResume = r.input.maxResumeChars
@@ -170,7 +171,7 @@ Page({
   // ---- 提交分析：提交任务 → 轮询真实进度 → 跳报告页 ----
   startAnalyze() {
     if (this.data.analyzing) return
-    if (this.data.quotaLeft === 0) {
+    if (this.data.quotaLeft === 0 && !this.data.quotaUnlimited) {
       wx.showToast({ title: '今日免费次数已用完，明天再来', icon: 'none' })
       return
     }

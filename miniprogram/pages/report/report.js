@@ -40,6 +40,7 @@ Page({
     rewritesStatus: 'none',
     copiesLeft: null,
     copyLimit: null,
+    copyUnlimited: false,
     // 引用上下文弹层
     context: { visible: false, title: '', spanId: '', lines: [] },
     // 反馈弹层
@@ -89,7 +90,7 @@ Page({
   loadQuota() {
     api
       .get('/api/quota', { loading: false })
-      .then((r) => this.setData({ copiesLeft: r.copies.remaining, copyLimit: r.copies.limit }))
+      .then((r) => this.setData({ copiesLeft: r.copies.remaining, copyLimit: r.copies.limit, copyUnlimited: r.unlimited === true }))
       .catch(() => {})
   },
 
@@ -250,7 +251,7 @@ Page({
     const idx = e.currentTarget.dataset.index
     const item = this.data.rewrites[idx]
     if (!item) return
-    if (this.data.copiesLeft === 0 && !item.copied) {
+    if (this.data.copiesLeft === 0 && !this.data.copyUnlimited && !item.copied) {
       wx.showToast({ title: `今天已复制 ${this.data.copyLimit} 条，明天再来`, icon: 'none' })
       return
     }

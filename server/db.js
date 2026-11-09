@@ -26,6 +26,8 @@ function load() {
     // 首次运行没有文件，用默认空结构
   }
   for (const k of ['reports', 'usage', 'feedback', 'jdCache']) if (!Array.isArray(data[k])) data[k] = []
+  // 运行配置（内测白名单等）：存在 settings 对象，字段级缺省由 whitelist.init 处理
+  if (!data.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) data.settings = {}
   fs.mkdirSync(config.DATA_DIR, { recursive: true })
 }
 load()
@@ -131,7 +133,8 @@ function countUsage(filter, since) {
     (u) => u.kind === filter.kind && u.createdAt >= since &&
       (!filter.owner || u.owner === filter.owner) &&
       (!filter.ipHash || u.ipHash === filter.ipHash) &&
-      (!filter.ref || u.ref === filter.ref)
+      (!filter.ref || u.ref === filter.ref) &&
+      (!filter.ownerFilter || filter.ownerFilter(u.owner))
   ).length
 }
 

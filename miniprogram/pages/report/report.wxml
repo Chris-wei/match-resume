@@ -88,7 +88,8 @@
   <!-- 改写建议 -->
   <view class="card">
     <view class="card-title">改写建议
-      <text class="aside" wx:if="{{rewritesStatus === 'done' && rewrites.length && copiesLeft !== null}}">今日可复制 {{copiesLeft}}/{{copyLimit}} 条</text>
+      <text class="aside" wx:if="{{rewritesStatus === 'done' && rewrites.length && copyUnlimited}}">白名单 · 不限次复制</text>
+      <text class="aside" wx:elif="{{rewritesStatus === 'done' && rewrites.length && copiesLeft !== null}}">今日可复制 {{copiesLeft}}/{{copyLimit}} 条</text>
     </view>
 
     <block wx:if="{{rewritesStatus === 'pending'}}">
@@ -117,7 +118,7 @@
         <view class="rw-foot">
           <text class="rw-note" wx:if="{{item.note}}">{{item.note}}</text>
           <button class="btn-ghost rw-copy" data-index="{{index}}" bindtap="copyRewrite"
-            disabled="{{copiesLeft === 0 && !item.copied}}">{{item.copied ? '再复制' : copiesLeft === 0 ? '今日已用完' : '复制'}}</button>
+            disabled="{{(copiesLeft === 0 && !copyUnlimited) && !item.copied}}">{{item.copied ? '再复制' : (copiesLeft === 0 && !copyUnlimited) ? '今日已用完' : '复制'}}</button>
         </view>
       </view>
       </view>

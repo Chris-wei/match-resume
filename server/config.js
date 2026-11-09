@@ -47,6 +47,8 @@ module.exports = {
   TRUST_PROXY: process.env.TRUST_PROXY === '1',
   // 网页后台（/admin）管理员密码；不设置则后台完全关闭
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || '',
+  // 后台账号：与 ADMIN_PASSWORD 同时配置才启用「账号+密码」登录；只配密码则不校验账号（向后兼容）
+  ADMIN_USERNAME: process.env.ADMIN_USERNAME || '',
   ADMIN_SESSION_HOURS: 12,
 
   // ---- 风控（设计文档 §6：个人 MVP 够用即可）----
@@ -69,6 +71,12 @@ module.exports = {
   MODERATION_BLOCKS_PER_10MIN: intEnv('MODERATION_BLOCKS_PER_10MIN', 5),
   // 逐条"判错了"标记：每人每天操作上限
   FLAG_PER_IDENTITY_PER_DAY: intEnv('FLAG_PER_IDENTITY_PER_DAY', 100),
+  // ---- 内测白名单：逗号/空白分隔的 openid（可写 o:xxx；只认 openid，设备 ID 不生效）----
+  // 白名单身份跳过身份与 IP 维度的限次/频控（分析、复制、PDF、判错），
+  // 但不豁免全站日限、内容安全与被拦试探限制；同输入复用规则不变（复用不扣次数）
+  // 这里的 env 解析只是首次初始化的种子：启动时 whitelist.init 会以 db.settings.limitWhitelist
+  // 为准覆盖本值，后台 /admin 可在线增删（即时生效），之后改 env 不再生效
+  LIMIT_WHITELIST: String(process.env.LIMIT_WHITELIST || '').split(/[,，\s]+/).map((s) => s.trim()).filter(Boolean),
 
   // ---- 内容安全（本地词库 → 微信 msgSecCheck；微信部分复用上面的 WX_APPID/WX_APPSECRET）----
   SENSITIVE_WORDS_FILE: process.env.SENSITIVE_WORDS_FILE || path.join(__dirname, 'sensitive-words.txt'),
