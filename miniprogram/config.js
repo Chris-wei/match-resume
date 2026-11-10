@@ -1,8 +1,14 @@
-// 小程序端配置
+// 小程序端配置。开发者工具走本机服务；真机预览、体验版、正式版走线上。
+function apiBase() {
+  try {
+    const info = typeof wx.getDeviceInfo === 'function' ? wx.getDeviceInfo() : wx.getSystemInfoSync()
+    if (info && info.platform === 'devtools') return 'http://127.0.0.1:8787'
+  } catch (e) {}
+  return 'https://api.apeanut.cn'
+}
+
 module.exports = {
-  // 本地分析服务地址。开发者工具需在「详情 → 本地设置」勾选
-  // 「不校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书」才能访问 localhost
-  API_BASE: 'http://127.0.0.1:8787',
+  API_BASE: apiBase(),
 
   // 是否启用 PDF 上传入口（依赖服务端 pdfjs-dist）
   PDF_UPLOAD_ENABLED: true,

@@ -482,8 +482,21 @@ test('正常简历不误伤（默认词库）', () => {
     fs.readFileSync(path.join(ROOT, 'examples', 'jd.txt'), 'utf8') +
     '负责秒杀系统、杀毒引擎、暴力破解防护，用户量爆炸式增长；反洗钱合规平台'
   assert.equal(moderation.localCheck(text), null)
+  const benign = [
+    '反电信诈骗策略', '防范网络诈骗', '反网络赌博监测', '防范信用卡套现',
+    '识别伪造学历', '防范替考与防止替考'
+  ].join('；')
+  assert.equal(moderation.localCheck(benign), null)
+  for (const c of evalLib.loadCases(path.join(ROOT, 'eval', 'cases'))) {
+    const hit = moderation.localCheck(`${c.resume}\n${c.jd}`)
+    assert.equal(hit, null, `${c.id} 被误伤：${hit}`)
+  }
 })
-test('默认词库可加载且能命中', () => assert.equal(moderation.localCheck('网上看到血腥视频'), '血腥'))
+test('默认词库可加载且能命中', () => {
+  assert.equal(moderation.localCheck('网上看到血腥视频'), '血腥')
+  assert.equal(moderation.localCheck('这是一份刷单兼职'), '刷单兼职')
+  assert.equal(moderation.localCheck('负责反电信诈骗，另招刷单兼职'), '刷单兼职')
+})
 test('微信送检按行切段且每段不超长', () => {
   const pieces = moderation.chunk(['a'.repeat(1500), 'b'.repeat(1500), 'c'.repeat(4500)].join('\n'), 2000)
   assert.ok(pieces.every((p) => p.length <= 2000))

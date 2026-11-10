@@ -21,7 +21,7 @@ const ERROR_TEXT = {
   TOO_LARGE: '文件超过 5MB，请压缩后重试',
   CONTENT_BLOCKED: '提交内容包含违规信息，请修改后再试',
   MODERATION_UNAVAILABLE: '内容安全检查暂时不可用，请稍后再试（本次不消耗次数）',
-  NETWORK: '连不上分析服务，请确认本地服务已启动（npm start）'
+  NETWORK: '连不上分析服务，请检查网络后稍后再试'
 }
 
 function friendlyError(e) {
