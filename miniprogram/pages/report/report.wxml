@@ -134,16 +134,22 @@
 
   <!-- 底部操作 -->
   <view class="bottom">
-    <button class="btn-ghost" bindtap="openFeedback">
-      {{feedback.submitted ? '✓ 已反馈，感谢帮助改进' : '这份报告准吗？告诉我'}}
-    </button>
-    <view class="bottom-links">
-      <text bindtap="goAnalyze">再分析一份</text>
-      <text class="sep">·</text>
-      <button class="link-btn bottom-share" open-type="share">分享给朋友</button>
-      <text class="sep">·</text>
-      <text class="danger" bindtap="deleteReport">删除这份报告</text>
+    <!-- 反馈：独立一行卡片，和下方的操作按钮区分开 -->
+    <view class="fb-entry {{feedback.submitted ? 'fb-entry-done' : ''}}" bindtap="openFeedback" hover-class="fb-entry-hover">
+      <view class="fb-entry-icon">{{feedback.submitted ? '✓' : '?'}}</view>
+      <view class="fb-entry-main">
+        <view class="fb-entry-title">{{feedback.submitted ? '已收到你的反馈' : '这份报告准吗？'}}</view>
+        <view class="fb-entry-sub">{{feedback.submitted ? '谢谢，我们会据此改进判断' : '花 10 秒告诉我们，帮助改进判断'}}</view>
+      </view>
+      <text wx:if="{{!feedback.submitted}}" class="fb-entry-go">去反馈 ›</text>
     </view>
+
+    <view class="bottom-actions">
+      <button class="btn-outline" bindtap="goAnalyze">再分析一份</button>
+      <button class="btn-primary" open-type="share">分享给朋友</button>
+    </view>
+
+    <view class="bottom-delete" bindtap="deleteReport">删除这份报告</view>
   </view>
 
   <!-- 引用上下文弹层 -->

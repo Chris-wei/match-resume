@@ -62,7 +62,7 @@ Page({
 
   onLoad(options) {
     const reportId = options.id || ''
-    this.setData({ reportId })
+    this.setData({ reportId, 'feedback.submitted': wx.getStorageSync('fb_' + reportId) === '1' })
     // 分析页刚拿到的报告直接用，省一次请求
     const cache = getApp().globalData.reportCache
     if (cache && cache[reportId]) {

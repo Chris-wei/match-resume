@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:500px;height:400px;overflow:hidden}
+body{font-family:'PingFang SC',-apple-system,sans-serif;background:linear-gradient(150deg,#4a68ff 0%,#2a44d8 100%);position:relative;color:#111827}
+.glow{position:absolute;width:360px;height:360px;border-radius:50%;background:rgba(255,255,255,.08);right:-120px;top:-150px}
+.glow2{position:absolute;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.06);left:-80px;bottom:-110px}
+.head{position:absolute;left:36px;top:30px;color:#fff}
+.eyebrow{font-size:17px;opacity:.8;letter-spacing:1px}
+.title{font-size:36px;font-weight:700;margin-top:6px;letter-spacing:1px}
+.title b{color:#ffd66b}
+.card{position:absolute;left:36px;right:36px;bottom:30px;height:206px;background:#fff;border-radius:22px;box-shadow:0 14px 34px rgba(10,20,80,.28);display:flex;align-items:center;padding:0 26px;gap:26px}
+.ring{width:132px;height:132px;border-radius:50%;background:conic-gradient(#3b5bfd 72%,#eef1ff 0);display:flex;align-items:center;justify-content:center;flex:none}
+.ring-in{width:106px;height:106px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.num{font-size:46px;font-weight:800;color:#3b5bfd;line-height:1}
+.lab{font-size:15px;color:#9ca3af;margin-top:6px}
+.rows{flex:1;display:flex;flex-direction:column;gap:14px;min-width:0}
+.row{display:flex;align-items:center;gap:10px;font-size:19px;color:#374151;white-space:nowrap}
+.tag{font-size:16px;font-weight:600;padding:3px 10px;border-radius:8px;flex:none}
+.hit{background:#e8f7ef;color:#12a150}.partial{background:#fef4e2;color:#d97706}.miss{background:#fdeeee;color:#e5484d}
+</style></head><body>
+<div class="glow"></div><div class="glow2"></div>
+<div class="head"><div class="eyebrow">简历 × 岗位 · 逐条匹配</div><div class="title">30 秒看清<b>差在哪</b></div></div>
+<div class="card">
+ <div class="ring"><div class="ring-in"><div class="num">72</div><div class="lab">匹配分</div></div></div>
+ <div class="rows">
+  <div class="row"><span class="tag hit">满足</span>3 年后端开发经验</div>
+  <div class="row"><span class="tag partial">部分</span>K8s 部署经验</div>
+  <div class="row"><span class="tag miss">缺失</span>量化的项目成果</div>
+ </div>
+</div>
+</body></html>

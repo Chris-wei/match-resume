@@ -1,5 +1,8 @@
 // 分享：目标是拉朋友来自己测，所以落地页一律是首页，不带任何报告内容
 const HOME = '/pages/index/index'
+// 首页/分析页用固定图（分析页默认截图可能露出简历原文）；报告页不传图，用默认截图展示分数
+const CARD_IMAGE = '/images/share-card.jpg' // 5:4
+const TIMELINE_IMAGE = '/images/share-timeline.jpg' // 朋友圈按 1:1 显示
 const DEFAULT_TITLE = '你的简历和目标岗位匹配几分？30 秒看清差在哪'
 
 /**
@@ -14,15 +17,25 @@ function enableShareMenu() {
 /** 发给朋友；有分数时用"你猜你多少分"的钩子 */
 function appMessage(score) {
   const hasScore = typeof score === 'number' && !Number.isNaN(score)
-  return {
-    title: hasScore ? `我的简历匹配 ${score} 分，你猜你的多少分？` : DEFAULT_TITLE,
-    path: HOME
-  }
+  if (hasScore) return { title: `我的简历匹配 ${score} 分，你猜你的多少分？`, path: HOME }
+  return { title: DEFAULT_TITLE, path: HOME, imageUrl: CARD_IMAGE }
 }
 
 /** 朋友圈：只在首页启用，标题不带个人分数 */
 function timeline() {
-  return { title: DEFAULT_TITLE, query: '' }
+  return { title: DEFAULT_TITLE, query: '', imageUrl: TIMELINE_IMAGE }
 }
 
-module.exports = { enableShareMenu, appMessage, timeline, DEFAULT_TITLE }
+/**
+ * 是否是从朋友圈打开的单页模式（场景值 1154）：
+ * 不能登录、不能调接口、不能跳转页面，用户需点底部「前往小程序」进入完整版。
+ */
+function isSinglePage() {
+  try {
+    return wx.getLaunchOptionsSync().scene === 1154
+  } catch (e) {
+    return false
+  }
+}
+
+module.exports = { enableShareMenu, appMessage, timeline, isSinglePage, DEFAULT_TITLE }

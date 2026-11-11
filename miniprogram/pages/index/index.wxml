@@ -8,7 +8,8 @@
     <view class="hero-point"><text class="hp-icon">✓</text>联系方式、姓名自动脱敏</view>
   </view>
   <button class="btn-primary hero-cta" bindtap="goAnalyze">免费开始分析</button>
-  <view class="hero-quota" wx:if="{{quotaUnlimited}}">暂不限次</view>
+  <view class="hero-quota" wx:if="{{singlePage}}">点击屏幕底部「前往小程序」开始使用</view>
+  <view class="hero-quota" wx:elif="{{quotaUnlimited}}">暂不限次</view>
   <view class="hero-quota" wx:elif="{{quotaLeft !== null}}">
     今日剩余 <text class="hero-quota-num">{{quotaLeft}}</text>/{{quotaLimit}} 次免费分析
   </view>
