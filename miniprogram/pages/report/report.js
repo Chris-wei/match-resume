@@ -1,5 +1,6 @@
 const api = require('../../utils/api')
 const { formatDate, scoreLevel, LEVEL_COLOR, VERDICT_TEXT, CATEGORY_TEXT } = require('../../utils/format')
+const share = require('../../utils/share')
 
 // 列表默认按"最该处理的在前"排序：缺失 → 部分 → 待核对 → 满足
 const VERDICT_ORDER = { miss: 0, partial: 1, unclear: 2, hit: 3 }
@@ -333,7 +334,7 @@ Page({
   },
 
   onShareAppMessage() {
-    const score = this.data.report && this.data.report.score ? this.data.report.score.overall : '--'
-    return { title: `我的简历匹配 ${score} 分，你猜你的多少分？`, path: '/pages/index/index' }
+    const r = this.data.report
+    return share.appMessage(r && r.score ? r.score.overall : undefined)
   }
 })

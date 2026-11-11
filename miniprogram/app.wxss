@@ -256,3 +256,27 @@ button::after {
 .notice-warn { background: var(--orange-bg); color: #92400e; }
 .notice-danger { background: var(--red-bg); color: #b42318; }
 .notice-info { background: var(--primary-soft); color: var(--primary-dark); }
+
+/* 文字链接样式的 button（open-type 需要 button 承载） */
+.link-btn {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  line-height: inherit;
+  font-size: 24rpx;
+  font-weight: 400;
+  color: var(--primary);
+  width: auto !important;
+}
+
+.link-btn::after {
+  border: none;
+}
+
+.link-btn.button-hover {
+  background: none;
+  opacity: 0.6;
+}

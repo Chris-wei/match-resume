@@ -2,6 +2,7 @@ const config = require('../../config')
 const api = require('../../utils/api')
 const { redact } = require('../../utils/redact')
 const { validateResume, validateJD } = require('../../utils/validate')
+const share = require('../../utils/share')
 
 // 进度步骤与服务端任务阶段（job.stage）的对应关系
 const STEPS = [
@@ -246,5 +247,9 @@ Page({
       this.poller = null
     }
     if (this.data.analyzing) this.setData({ analyzing: false, overlay: this.data.showAgree })
+  },
+
+  onShareAppMessage() {
+    return share.appMessage()
   }
 })

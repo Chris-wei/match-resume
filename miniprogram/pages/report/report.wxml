@@ -21,6 +21,7 @@
       </view>
       <view class="summary-side">
         <view class="conclusion">{{report.conclusion}}</view>
+        <button class="btn-ghost share-btn" open-type="share">分享给朋友，测测 TA 的简历</button>
       </view>
     </view>
     <view wx:if="{{report.score.capped}}" class="notice notice-danger cap">
@@ -138,6 +139,8 @@
     </button>
     <view class="bottom-links">
       <text bindtap="goAnalyze">再分析一份</text>
+      <text class="sep">·</text>
+      <button class="link-btn bottom-share" open-type="share">分享给朋友</button>
       <text class="sep">·</text>
       <text class="danger" bindtap="deleteReport">删除这份报告</text>
     </view>

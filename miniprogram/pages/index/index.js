@@ -1,5 +1,6 @@
 const api = require('../../utils/api')
 const { formatDate, scoreLevel } = require('../../utils/format')
+const share = require('../../utils/share')
 
 Page({
   data: {
@@ -14,6 +15,9 @@ Page({
       { label: '学历', value: 100, count: 1 },
       { label: '加分项', value: 45, count: 2 }
     ]
+  },
+  onLoad() {
+    share.enableShareMenu()
   },
   onShow() {
     this.loadQuota()
@@ -47,5 +51,11 @@ Page({
   },
   goLegal() {
     wx.navigateTo({ url: '/pages/legal/legal' })
+  },
+  onShareAppMessage() {
+    return share.appMessage()
+  },
+  onShareTimeline() {
+    return share.timeline()
   }
 })

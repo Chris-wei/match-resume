@@ -464,6 +464,20 @@
   color: var(--text-2);
 }
 
+.share-btn {
+  margin-top: 20rpx;
+  font-size: 25rpx;
+  padding: 0 24rpx;
+  line-height: 60rpx;
+  width: auto !important;
+  display: inline-block;
+}
+
+.bottom-share {
+  font-size: 24rpx;
+  color: var(--primary);
+}
+
 .bottom-links .sep {
   color: var(--text-3);
 }
