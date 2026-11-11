@@ -16,9 +16,6 @@ Page({
       { label: '加分项', value: 45, count: 2 }
     ]
   },
-  onLoad() {
-    share.enableShareMenu()
-  },
   onShow() {
     this.loadQuota()
     this.loadReports()
@@ -54,8 +51,5 @@ Page({
   },
   onShareAppMessage() {
     return share.appMessage()
-  },
-  onShareTimeline() {
-    return share.timeline()
   }
 })
