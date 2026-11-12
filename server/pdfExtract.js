@@ -23,15 +23,15 @@ function extractFromBuffer(buf, { timeoutMs = config.PDF_TIMEOUT_MS } = {}) {
       resourceLimits: { maxOldGenerationSizeMb: 256 }
     })
     const timer = setTimeout(
-      () => done({ ok: false, reason: 'timeout', message: '文件解析超时（可能过于复杂），请直接粘贴简历文本' }),
+      () => done({ ok: false, reason: 'timeout', message: '这份 PDF 太复杂，解析超时了。请把简历文字直接粘贴到输入框' }),
       timeoutMs
     )
     worker.once('message', done)
     worker.once('error', (e) => {
       console.error('pdf worker error:', e && e.message)
-      done({ ok: false, reason: 'invalid', message: '文件解析失败，请粘贴简历文本' })
+      done({ ok: false, reason: 'invalid', message: '这份 PDF 暂时读不出来。请把简历文字直接粘贴到输入框' })
     })
-    worker.once('exit', () => done({ ok: false, reason: 'invalid', message: '文件解析失败，请粘贴简历文本' }))
+    worker.once('exit', () => done({ ok: false, reason: 'invalid', message: '这份 PDF 暂时读不出来。请把简历文字直接粘贴到输入框' }))
   })
 }
 

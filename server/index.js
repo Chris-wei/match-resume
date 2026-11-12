@@ -435,7 +435,7 @@ const routes = {
       return send(res, 200, fail('TOO_LARGE', '文件超过 5MB，请压缩后重试'))
     }
     if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') {
-      return send(res, 200, fail('INVALID_INPUT', '不是有效的 PDF 文件，请直接粘贴简历文本'))
+      return send(res, 200, fail('INVALID_INPUT', '这不是有效的 PDF。请换一个文件，或把简历文字直接粘贴到输入框'))
     }
     const lim = limits.checkPdf(db, ctx.owner)
     if (!lim.ok) return send(res, 200, lim)

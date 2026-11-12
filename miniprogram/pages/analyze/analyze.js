@@ -33,6 +33,8 @@ Page({
     maxJD: config.MAX_JD_CHARS,
     pdfEnabled: config.PDF_UPLOAD_ENABLED,
     pdfBusy: false,
+    pdfHint: '',
+    resumeFocus: false,
     quotaLeft: null,
     quotaLimit: null,
     quotaUnlimited: false,
@@ -70,7 +72,11 @@ Page({
   },
 
   onResumeInput(e) {
-    this.setData({ resume: e.detail.value })
+    const resume = e.detail.value
+    const patch = { resume }
+    if (this.data.resumeFocus) patch.resumeFocus = false
+    if (this.data.pdfHint && resume !== this.data.resume) patch.pdfHint = ''
+    this.setData(patch)
   },
   onJDInput(e) {
     this.setData({ jd: e.detail.value })
@@ -86,7 +92,9 @@ Page({
           wx.showToast({ title: '剪贴板是空的', icon: 'none' })
           return
         }
-        this.setData({ [field]: text.slice(0, max) })
+        const patch = { [field]: text.slice(0, max) }
+        if (field === 'resume') patch.pdfHint = ''
+        this.setData(patch)
         // 微信读剪贴板会弹系统提示「xxx 读取了你的剪切板内容」（文案过长会折行溢出），
         // 立刻用自己的短提示覆盖它
         if (text.length > max) {
@@ -98,7 +106,25 @@ Page({
     })
   },
   clearField(e) {
-    this.setData({ [e.currentTarget.dataset.field]: '' })
+    const field = e.currentTarget.dataset.field
+    const patch = { [field]: '' }
+    if (field === 'resume') patch.pdfHint = ''
+    this.setData(patch)
+  },
+
+  // 解析失败不靠一闪而过的 toast：弹窗说清楚，输入框上方再留一条
+  showPdfFail(message) {
+    const content = message || '这份 PDF 暂时读不出来。请把简历文字直接粘贴到输入框'
+    this.setData({ pdfHint: content })
+    wx.showModal({
+      title: '没有读出文字',
+      content,
+      confirmText: '去粘贴',
+      showCancel: false,
+      success: () => {
+        this.setData({ resumeFocus: false }, () => this.setData({ resumeFocus: true }))
+      }
+    })
   },
 
   // ---- 隐私确认 ----
@@ -128,7 +154,7 @@ Page({
         const file = res.tempFiles[0]
         if (!file) return
         if (file.size > 5 * 1024 * 1024) {
-          wx.showToast({ title: '文件超过 5MB，请压缩后重试', icon: 'none' })
+          this.showPdfFail('文件超过 5MB，请压缩后再试，或把简历文字直接粘贴到输入框')
           return
         }
         this.setData({ pdfBusy: true })
@@ -148,21 +174,23 @@ Page({
                 const result = resp.result || {}
                 if (result.ok && result.text) {
                   const v = validateResume(result.text, this.data.maxResume)
-                  this.setData({ resume: v.text || result.text.slice(0, this.data.maxResume) })
+                  this.setData({
+                    resume: v.text || result.text.slice(0, this.data.maxResume),
+                    pdfHint: ''
+                  })
                   wx.showToast({ title: `已提取 ${result.text.length} 字，请核对后分析`, icon: 'none', duration: 2500 })
                 } else {
-                  // result.ok=false 的 message 自带降级引导（扫描件/加密损坏），只提示不报错
-                  wx.showToast({ title: result.message || '解析失败，请直接粘贴文本', icon: 'none', duration: 2500 })
+                  this.showPdfFail(result.message)
                 }
               })
               .catch((e) => {
                 done()
-                wx.showToast({ title: api.friendlyError(e), icon: 'none' })
+                this.showPdfFail((e && e.message) || api.friendlyError(e))
               })
           },
           fail: () => {
             done()
-            wx.showToast({ title: '读取文件失败', icon: 'none' })
+            this.showPdfFail('没有读到这个文件。请重新选择，或把简历文字直接粘贴到输入框')
           }
         })
       }

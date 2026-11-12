@@ -9,7 +9,7 @@ const ERROR_TEXT = {
   IP_LIMITED: '当前网络今日次数已用完，换个网络或明天再来',
   GLOBAL_LIMITED: '今日全站分析次数已达上限，明天再来',
   COPY_LIMIT: '今天的复制次数已用完，明天再来',
-  PDF_LIMIT: '今日 PDF 解析次数已用完，请直接粘贴文本',
+  PDF_LIMIT: '今天的 PDF 解析次数已用完。请把简历文字直接粘贴到输入框',
   BAD_IDENTITY: '无法建立会话，请重新进入小程序',
   ANALYZE_FAILED: '分析失败，本次不消耗免费次数，请重试',
   BUSY: '上一份报告还在分析中，请稍候再提交',

@@ -14,8 +14,10 @@
       </view>
       <view class="tool tool-muted" wx:if="{{resume.length}}" data-field="resume" bindtap="clearField" hover-class="tool-hover">清空</view>
     </view>
+    <view class="notice notice-warn pdf-hint" wx:if="{{pdfHint}}">{{pdfHint}}</view>
     <!-- 原生 textarea 会盖住弹层：弹层出现时换成静态文本 -->
     <textarea wx:if="{{!overlay}}" class="input-area" value="{{resume}}" maxlength="{{maxResume}}"
+      focus="{{resumeFocus}}"
       bindinput="onResumeInput" always-embed="{{true}}" adjust-position="{{true}}" cursor-spacing="140"
       placeholder="粘贴简历全文：工作经历、项目经历、技能清单" placeholder-class="ph"></textarea>
     <view wx:else class="input-area input-static {{resume ? '' : 'ph'}}">{{resume || '粘贴简历全文：工作经历、项目经历、技能清单'}}</view>

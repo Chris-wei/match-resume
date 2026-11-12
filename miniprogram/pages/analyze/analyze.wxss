@@ -47,6 +47,10 @@
   opacity: 0.7;
 }
 
+.pdf-hint {
+  margin-bottom: 18rpx;
+}
+
 .tool-icon {
   font-size: 26rpx;
 }

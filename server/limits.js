@@ -86,11 +86,11 @@ function checkPdf(db, owner, now = Date.now(), cfg = config) {
   if (isWhitelisted(owner, cfg)) return { ok: true }
   const ten = count(db, { kind: 'pdf', owner }, now - TEN_MIN_MS)
   if (ten >= cfg.PDF_PER_IDENTITY_PER_10MIN) {
-    return { ok: false, code: 'RATE_LIMITED', message: '解析太频繁，请 10 分钟后再试，或直接粘贴文本' }
+    return { ok: false, code: 'RATE_LIMITED', message: '解析太频繁了。请 10 分钟后再试，或把简历文字直接粘贴到输入框' }
   }
   const day = count(db, { kind: 'pdf', owner }, dayStart(now))
   if (day >= cfg.PDF_PER_IDENTITY_PER_DAY) {
-    return { ok: false, code: 'PDF_LIMIT', message: '今日 PDF 解析次数已用完，请直接粘贴文本' }
+    return { ok: false, code: 'PDF_LIMIT', message: '今天的 PDF 解析次数已用完。请把简历文字直接粘贴到输入框' }
   }
   return { ok: true }
 }

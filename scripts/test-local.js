@@ -757,6 +757,140 @@ test('别名命中排第一', () => {
   assert.equal(ids[0], 'S2')
 })
 
+console.log('\n== 单测：PDF 阅读顺序 ==')
+function pdfItem(str, x, y, w, font = 12) {
+  return { str, width: w, transform: [font, 0, 0, font, x, y] }
+}
+// 改动前的按行拼接：单栏结果必须与它一致
+function legacyPageToLines(textContent) {
+  const buckets = new Map()
+  for (const item of textContent.items) {
+    if (!item.str || !item.str.trim()) continue
+    const t = item.transform
+    const key = String(Math.round(t[5] / 3))
+    if (!buckets.has(key)) buckets.set(key, [])
+    buckets.get(key).push({ x: t[4], s: item.str })
+  }
+  const keys = [...buckets.keys()].sort((a, b) => Number(b) - Number(a))
+  return keys.map((k) => {
+    const parts = buckets.get(k).sort((a, b) => a.x - b.x)
+    return parts.map((p) => p.s).join(' ').replace(/\s+/g, ' ').trim()
+  })
+}
+const { pageToLines } = require(S('pdfLayout'))
+const singleColumn = {
+  items: [
+    pdfItem('张三', 72, 780, 80),
+    pdfItem('后端工程师', 160, 780, 100),
+    pdfItem('字节跳动', 72, 740, 80),
+    pdfItem('负责推荐系统的召回与排序，并推动实验平台落地', 72, 710, 420),
+    pdfItem('美团', 72, 670, 50),
+    pdfItem('负责商家广告投放与策略迭代', 72, 640, 360),
+    pdfItem('教育背景', 72, 600, 80),
+    pdfItem('本科', 160, 600, 40),
+    pdfItem('计算机', 210, 601, 60)
+  ]
+}
+test('单栏输出与原来的按行拼接一致', () => {
+  assert.deepEqual(pageToLines(singleColumn), legacyPageToLines(singleColumn))
+})
+test('行内碎片按从左到右接上，空片段丢掉', () => {
+  assert.deepEqual(pageToLines({
+    items: [
+      pdfItem('教育', 72, 700, 40),
+      pdfItem('   ', 120, 700, 20),
+      pdfItem('背景', 150, 700, 40),
+      pdfItem('本科', 72, 670, 40)
+    ]
+  }), ['教育 背景', '本科'])
+})
+
+function twoColItems(leftYs, rightYs) {
+  const items = []
+  for (const y of leftYs) items.push(pdfItem('左' + y, 40, y, 180))
+  for (const y of rightYs) items.push(pdfItem('右' + y, 320, y, 220))
+  return items
+}
+test('同一基线的左右栏先读完左栏再读右栏', () => {
+  const ys = [760, 740, 720, 700]
+  assert.deepEqual(pageToLines({ items: twoColItems(ys, ys) }), [
+    '左760', '左740', '左720', '左700',
+    '右760', '右740', '右720', '右700'
+  ])
+})
+test('左右栏行高不对齐时仍先左后右', () => {
+  assert.deepEqual(
+    pageToLines({ items: twoColItems([760, 740, 720], [750, 730, 710, 690]) }),
+    ['左760', '左740', '左720', '右750', '右730', '右710', '右690']
+  )
+})
+test('通栏标题和结尾留在原位，中间两段双栏各自先左后右', () => {
+  const items = [
+    pdfItem('张三', 40, 840, 480),
+    ...twoColItems([800, 780, 760], [800, 780, 760]),
+    pdfItem('项目经历', 40, 730, 480),
+    ...twoColItems([700, 680, 660], [700, 680, 660]),
+    pdfItem('自我评价 做事认真', 40, 620, 460)
+  ]
+  assert.deepEqual(pageToLines({ items }), [
+    '张三',
+    '左800', '左780', '左760',
+    '右800', '右780', '右760',
+    '项目经历',
+    '左700', '左680', '左660',
+    '右700', '右680', '右660',
+    '自我评价 做事认真'
+  ])
+})
+test('单栏中的公司与日期留在同一行', () => {
+  const content = {
+    items: [
+      pdfItem('字节跳动', 72, 760, 90),
+      pdfItem('2019.03-2021.06', 450, 760, 100),
+      pdfItem('负责推荐系统召回', 72, 740, 160),
+      pdfItem('美团', 72, 700, 50),
+      pdfItem('2021.07-2024.02', 450, 700, 100),
+      pdfItem('负责广告策略迭代', 72, 680, 170),
+      pdfItem('快手', 72, 640, 50),
+      pdfItem('2024.03-至今', 460, 640, 90),
+      pdfItem('负责增长实验平台', 72, 620, 180)
+    ]
+  }
+  assert.deepEqual(pageToLines(content), legacyPageToLines(content))
+})
+test('窄技能表按行读，不把等级拆成另一栏', () => {
+  const content = {
+    items: [760, 740, 720, 700].flatMap((y, i) => [
+      pdfItem(['Java', 'Go', 'MySQL', 'Redis'][i], 72, y, 70),
+      pdfItem('熟练', 360, y, 30)
+    ])
+  }
+  assert.deepEqual(pageToLines(content), legacyPageToLines(content))
+})
+test('不足三行的左右配对不当成双栏', () => {
+  const content = { items: twoColItems([760, 740], [760, 740]) }
+  assert.deepEqual(pageToLines(content), legacyPageToLines(content))
+})
+test('横向跨度超出页宽时按行拼接', () => {
+  const content = {
+    items: [760, 740, 720, 700].flatMap((y) => [
+      pdfItem('左' + y, 0, y, 180),
+      pdfItem('右' + y, 1e12, y, 220)
+    ])
+  }
+  assert.deepEqual(pageToLines(content), legacyPageToLines(content))
+})
+test('三栏有两条竖缝时保持按行拼接', () => {
+  const content = {
+    items: [760, 740, 720, 700].flatMap((y) => [
+      pdfItem('甲' + y, 40, y, 160),
+      pdfItem('乙' + y, 240, y, 160),
+      pdfItem('丙' + y, 440, y, 160)
+    ])
+  }
+  assert.deepEqual(pageToLines(content), legacyPageToLines(content))
+})
+
 console.log('\n== 集成：mock 流水线（examples 简历 + JD）==')
   ; (async () => {
     await testAsync('配了 AppID 时不传 code 拿不到设备身份（openid 不可绕过）', async () => {
