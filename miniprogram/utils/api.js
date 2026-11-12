@@ -18,7 +18,7 @@ const ERROR_TEXT = {
   EXPIRED: '报告已过期（保留 30 天）',
   NOT_FOUND: '报告不存在或已被删除',
   INVALID_INPUT: '输入内容不符合要求',
-  TOO_LARGE: '文件超过 5MB，请压缩后重试',
+  TOO_LARGE: '文件超过 5MB，请压缩后再试，或把简历文字直接粘贴到输入框',
   CONTENT_BLOCKED: '提交内容包含违规信息，请修改后再试',
   MODERATION_UNAVAILABLE: '内容安全检查暂时不可用，请稍后再试（本次不消耗次数）',
   NETWORK: '连不上分析服务，请检查网络后稍后再试'

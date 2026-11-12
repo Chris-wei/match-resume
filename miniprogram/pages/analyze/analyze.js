@@ -174,18 +174,28 @@ Page({
                 const result = resp.result || {}
                 if (result.ok && result.text) {
                   const v = validateResume(result.text, this.data.maxResume)
-                  this.setData({
-                    resume: v.text || result.text.slice(0, this.data.maxResume),
-                    pdfHint: ''
-                  })
-                  wx.showToast({ title: `已提取 ${result.text.length} 字，请核对后分析`, icon: 'none', duration: 2500 })
+                  if (!v.ok) {
+                    this.showPdfFail(v.error)
+                    return
+                  }
+                  this.setData({ resume: v.text, pdfHint: '' })
+                  const tip = v.truncated
+                    ? `已提取前 ${v.text.length} 字，请核对后分析`
+                    : `已提取 ${result.text.length} 字，请核对后分析`
+                  wx.showToast({ title: tip, icon: 'none', duration: 2500 })
                 } else {
                   this.showPdfFail(result.message)
                 }
               })
               .catch((e) => {
                 done()
-                this.showPdfFail((e && e.message) || api.friendlyError(e))
+                const text = ((e && e.message) || api.friendlyError(e) || '').trim()
+                if (!text || text.includes('粘贴')) {
+                  this.showPdfFail(text)
+                  return
+                }
+                const base = /[。！？]$/.test(text) ? text : `${text}。`
+                this.showPdfFail(`${base}也可以把简历文字直接粘贴到输入框`)
               })
           },
           fail: () => {

@@ -70,6 +70,9 @@ function columnStats(lines, x0, x1, span) {
   let rightMax = -Infinity
   let leftLines = 0
   let rightLines = 0
+  let leftOnly = 0
+  let rightOnly = 0
+  let paired = 0
   for (const line of lines) {
     let hasL = false
     let hasR = false
@@ -88,9 +91,20 @@ function columnStats(lines, x0, x1, span) {
     }
     if (hasL) leftLines++
     if (hasR) rightLines++
+    if (hasL && hasR) paired++
+    else if (hasL) leftOnly++
+    else if (hasR) rightOnly++
   }
   if (leftMax < leftMin || rightMax < rightMin) return null
-  return { leftLines, rightLines, leftWidth: leftMax - leftMin, rightWidth: rightMax - rightMin }
+  return {
+    leftLines,
+    rightLines,
+    leftWidth: leftMax - leftMin,
+    rightWidth: rightMax - rightMin,
+    leftOnly,
+    rightOnly,
+    paired
+  }
 }
 
 function detectGutter(lines) {
@@ -140,8 +154,9 @@ function detectGutter(lines) {
     if (!side) continue
     if (side.leftLines < MIN_SIDE || side.rightLines < MIN_SIDE) continue
     if (side.leftWidth < MIN_COL || side.rightWidth < MIN_COL) continue
-    // 缝比两侧文字都宽时，多半是「公司……日期」这种悬挂字段
+    // 缝比两侧文字都宽，或右侧每行都贴在左侧同一行、下面还有只属于左边的正文：是「公司 日期」
     if (width > Math.min(side.leftWidth, side.rightWidth)) continue
+    if (side.rightOnly === 0 && side.leftOnly > 0 && side.paired > 0) continue
     runs.push({ x0, x1 })
   }
   if (runs.length !== 1) return null

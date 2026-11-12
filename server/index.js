@@ -432,7 +432,7 @@ const routes = {
     if (!data) return send(res, 200, fail('INVALID_INPUT', '缺少文件内容'))
     const buf = Buffer.from(data, 'base64')
     if (buf.length > config.MAX_PDF_BYTES) {
-      return send(res, 200, fail('TOO_LARGE', '文件超过 5MB，请压缩后重试'))
+      return send(res, 200, fail('TOO_LARGE', '文件超过 5MB，请压缩后再试，或把简历文字直接粘贴到输入框'))
     }
     if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') {
       return send(res, 200, fail('INVALID_INPUT', '这不是有效的 PDF。请换一个文件，或把简历文字直接粘贴到输入框'))

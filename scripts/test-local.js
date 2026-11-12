@@ -842,6 +842,22 @@ test('通栏标题和结尾留在原位，中间两段双栏各自先左后右',
     '自我评价 做事认真'
   ])
 })
+test('靠右不远的日期仍留在同一行', () => {
+  const content = {
+    items: [
+      pdfItem('字节跳动', 72, 760, 160),
+      pdfItem('2019.03-2021.06', 300, 760, 150),
+      pdfItem('负责推荐系统的召回排序', 72, 740, 160),
+      pdfItem('美团', 72, 700, 80),
+      pdfItem('2021.07-2024.02', 300, 700, 150),
+      pdfItem('负责广告策略的迭代上线', 72, 680, 160),
+      pdfItem('快手', 72, 640, 80),
+      pdfItem('2024.03-至今', 310, 640, 140),
+      pdfItem('负责增长实验平台建设', 72, 620, 160)
+    ]
+  }
+  assert.deepEqual(pageToLines(content), legacyPageToLines(content))
+})
 test('单栏中的公司与日期留在同一行', () => {
   const content = {
     items: [
